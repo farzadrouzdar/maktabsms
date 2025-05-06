@@ -49,11 +49,6 @@ $total_contacts = $stmt->fetch()['total'];
             <li class="nav-item">
                 <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
             </li>
-            <li class="nav-item">
-                <a class="navbar-brand" href="dashboard.php">
-                    <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
-                </a>
-            </li>
         </ul>
         <ul class="navbar-nav ml-auto">
             <li class="nav-item">

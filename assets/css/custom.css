@@ -10,7 +10,8 @@ body {
     left: auto !important;
     width: 250px; /* Fixed width for sidebar */
     transition: width 0.3s ease; /* Smooth transition for responsive design */
-    padding-right: 0 !important; /* Remove any padding from right */
+    padding: 0 !important; /* Remove all padding */
+    margin: 0 !important; /* Remove all margin */
 }
 
 .main-header .navbar {
@@ -43,23 +44,29 @@ body {
 }
 
 /* Fix for sidebar menu items */
+.nav-sidebar {
+    padding: 0 !important; /* Remove padding from nav-sidebar */
+}
+
 .nav-sidebar .nav-link {
     display: flex;
     align-items: center;
     justify-content: flex-end; /* Align menu items to the right */
     text-align: right;
-    padding-right: 5px; /* Minimum padding to align with edge */
+    padding-right: 0 !important; /* Remove padding to align with edge */
+    padding-left: 5px; /* Small padding on the left for content */
+    margin-right: 0 !important; /* Ensure no margin */
 }
 
 .nav-sidebar .nav-link p {
-    margin-right: 10px; /* Reduced margin for closer alignment */
+    margin-right: 5px; /* Minimum margin for closer alignment */
     margin-left: 0;
     text-align: right;
     flex-grow: 1;
 }
 
 .nav-sidebar .nav-icon {
-    margin-left: 5px; /* Reduced margin for closer alignment */
+    margin-left: 0; /* Remove margin for perfect alignment */
     margin-right: 0;
     order: -1; /* Move icon to the right */
 }
@@ -114,8 +121,15 @@ body {
 
 /* Logo styling */
 .brand-link img {
-    max-height: 40px; /* Adjust logo size */
+    max-height: 35px; /* Optimized logo size for sidebar */
     width: auto;
+    padding-right: 10px; /* Small padding for alignment */
+}
+
+.login-logo img, .register-logo img {
+    max-height: 60px; /* Optimized logo size for login/register */
+    width: auto;
+    margin-bottom: 10px; /* Space below logo */
 }
 
 /* Responsive Design */
@@ -143,6 +157,9 @@ body {
     .info-box-number {
         font-size: 1.2rem; /* Smaller font on mobile */
     }
+    .login-logo img, .register-logo img {
+        max-height: 50px; /* Smaller logo on mobile */
+    }
 }
 
 @media (min-width: 768px) and (max-width: 991px) {
@@ -151,5 +168,11 @@ body {
     }
     .content-wrapper {
         margin-right: 200px !important;
+    }
+    .brand-link img {
+        max-height: 30px; /* Adjusted for tablets */
+    }
+    .login-logo img, .register-logo img {
+        max-height: 50px; /* Adjusted for tablets */
     }
 }
