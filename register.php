@@ -86,7 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="hold-transition register-page">
 <div class="register-box">
     <div class="register-logo">
-        <a href="#"><b>maktabsms</b></a>
+        <a href="register.php">
+            <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
+        </a>
     </div>
     <div class="card">
         <div class="card-body register-card-body">

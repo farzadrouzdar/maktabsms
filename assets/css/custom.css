@@ -6,10 +6,11 @@ body {
 }
 
 .main-sidebar {
-    right: 0 !important; /* Move sidebar to the right */
+    right: 0 !important; /* Move sidebar to the right edge */
     left: auto !important;
     width: 250px; /* Fixed width for sidebar */
     transition: width 0.3s ease; /* Smooth transition for responsive design */
+    padding-right: 0 !important; /* Remove any padding from right */
 }
 
 .main-header .navbar {
@@ -47,18 +48,18 @@ body {
     align-items: center;
     justify-content: flex-end; /* Align menu items to the right */
     text-align: right;
-    padding-right: 10px; /* Reduce padding to bring closer to edge */
+    padding-right: 5px; /* Minimum padding to align with edge */
 }
 
 .nav-sidebar .nav-link p {
-    margin-right: 15px;
+    margin-right: 10px; /* Reduced margin for closer alignment */
     margin-left: 0;
     text-align: right;
     flex-grow: 1;
 }
 
 .nav-sidebar .nav-icon {
-    margin-left: 10px;
+    margin-left: 5px; /* Reduced margin for closer alignment */
     margin-right: 0;
     order: -1; /* Move icon to the right */
 }
@@ -109,6 +110,12 @@ body {
 .info-box-number {
     font-size: 1.5rem;
     font-weight: bold;
+}
+
+/* Logo styling */
+.brand-link img {
+    max-height: 40px; /* Adjust logo size */
+    width: auto;
 }
 
 /* Responsive Design */

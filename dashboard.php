@@ -49,6 +49,11 @@ $total_contacts = $stmt->fetch()['total'];
             <li class="nav-item">
                 <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
             </li>
+            <li class="nav-item">
+                <a class="navbar-brand" href="dashboard.php">
+                    <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
+                </a>
+            </li>
         </ul>
         <ul class="navbar-nav ml-auto">
             <li class="nav-item">
@@ -59,7 +64,7 @@ $total_contacts = $stmt->fetch()['total'];
     <!-- Main Sidebar -->
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
-            <span class="brand-text font-weight-light">maktabsms</span>
+            <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
         </a>
         <div class="sidebar">
             <div class="user-panel mt-3 pb-3 mb-3 d-flex">

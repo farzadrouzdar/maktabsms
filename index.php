@@ -84,7 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="hold-transition login-page">
 <div class="login-box">
     <div class="login-logo">
-        <a href="#"><b>maktabsms</b></a>
+        <a href="index.php">
+            <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
+        </a>
     </div>
     <div class="card">
         <div class="card-body login-card-body">
