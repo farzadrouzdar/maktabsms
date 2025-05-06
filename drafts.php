@@ -49,14 +49,14 @@ if (isset($_GET['delete_group'])) {
 
 // Fetch all groups with draft count
 $stmt = $pdo->prepare("
-    SELECT dg.*, COUNT(d.id) as draft_count 
+    SELECT dg.id, dg.school_id, dg.group_name, dg.created_at, COUNT(d.id) as draft_count 
     FROM draft_groups dg 
-    LEFT JOIN drafts d ON dg.id = d.group_id 
+    LEFT JOIN drafts d ON dg.id = d.group_id AND d.school_id = ? 
     WHERE dg.school_id = ? 
-    GROUP BY dg.id 
+    GROUP BY dg.id, dg.group_name, dg.created_at 
     ORDER BY dg.group_name
 ");
-$stmt->execute([$school_id]);
+$stmt->execute([$school_id, $school_id]);
 $groups = $stmt->fetchAll();
 
 // Fetch group for editing

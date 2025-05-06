@@ -49,14 +49,14 @@ if (isset($_GET['delete_group'])) {
 
 // Fetch all groups with contact count
 $stmt = $pdo->prepare("
-    SELECT cg.*, COUNT(c.id) as contact_count 
+    SELECT cg.id, cg.school_id, cg.group_name, cg.created_at, COUNT(c.id) as contact_count 
     FROM contact_groups cg 
-    LEFT JOIN contacts c ON cg.id = c.group_id 
+    LEFT JOIN contacts c ON cg.id = c.group_id AND c.school_id = ? 
     WHERE cg.school_id = ? 
-    GROUP BY cg.id 
+    GROUP BY cg.id, cg.group_name, cg.created_at 
     ORDER BY cg.group_name
 ");
-$stmt->execute([$school_id]);
+$stmt->execute([$school_id, $school_id]);
 $groups = $stmt->fetchAll();
 
 // Fetch group for editing

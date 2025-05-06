@@ -91,6 +91,14 @@ if (isset($_GET['edit'])) {
     $stmt->execute([$draft_id, $school_id, $group_id]);
     $edit_draft = $stmt->fetch();
 }
+
+// Handle inserting variables into message
+if (isset($_POST['insert_variable'])) {
+    $variable = filter_var($_POST['variable'], FILTER_SANITIZE_STRING);
+    $message = isset($_POST['message']) ? $_POST['message'] : '';
+    $message .= $variable;
+    $edit_draft = ['title' => $edit_draft['title'], 'message' => $message, 'type' => $edit_draft['type'], 'id' => $edit_draft['id']];
+}
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -102,6 +110,15 @@ if (isset($_GET['edit'])) {
     <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
     <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
     <link rel="stylesheet" href="assets/css/custom.css">
+    <style>
+        .variable-btn {
+            margin: 5px;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
@@ -223,15 +240,22 @@ if (isset($_GET['edit'])) {
                             </div>
                             <div class="form-group">
                                 <label for="type">نوع پیش‌نویس</label>
-                                <select class="form-control" name="type" required>
+                                <select class="form-control" name="type" id="draft-type" required>
                                     <option value="simple" <?php echo $edit_draft && $edit_draft['type'] == 'simple' ? 'selected' : ''; ?>>ساده</option>
                                     <option value="smart" <?php echo $edit_draft && $edit_draft['type'] == 'smart' ? 'selected' : ''; ?>>هوشمند</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label for="message">متن پیام</label>
-                                <textarea class="form-control" name="message" rows="3" required><?php echo $edit_draft ? htmlspecialchars($edit_draft['message']) : ''; ?></textarea>
-                                <small>برای پیش‌نویس هوشمند، از متغیرها استفاده کنید: {name}, {field_1}, {field_2}, {field_3}, {field_4}</small>
+                                <textarea class="form-control" name="message" id="message" rows="3" required><?php echo $edit_draft ? htmlspecialchars($edit_draft['message']) : ''; ?></textarea>
+                            </div>
+                            <div id="variable-section" class="mt-2 <?php echo $edit_draft && $edit_draft['type'] == 'simple' ? 'hidden' : ''; ?>">
+                                <label>فیلدهای اختصاصی:</label>
+                                <button type="submit" name="insert_variable" value="{name}" class="btn btn-sm btn-primary variable-btn">نام</button>
+                                <button type="submit" name="insert_variable" value="{field_1}" class="btn btn-sm btn-primary variable-btn">فیلد ۱</button>
+                                <button type="submit" name="insert_variable" value="{field_2}" class="btn btn-sm btn-primary variable-btn">فیلد ۲</button>
+                                <button type="submit" name="insert_variable" value="{field_3}" class="btn btn-sm btn-primary variable-btn">فیلد ۳</button>
+                                <button type="submit" name="insert_variable" value="{field_4}" class="btn btn-sm btn-primary variable-btn">فیلد ۴</button>
                             </div>
                             <?php if ($edit_draft): ?>
                                 <input type="hidden" name="draft_id" value="<?php echo $edit_draft['id']; ?>">
@@ -325,5 +349,23 @@ if (isset($_GET['edit'])) {
 <script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
 <script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#draft-type').change(function() {
+            var type = $(this).val();
+            if (type === 'simple') {
+                $('#variable-section').addClass('hidden');
+            } else {
+                $('#variable-section').removeClass('hidden');
+            }
+        });
+
+        $('.variable-btn').click(function(e) {
+            e.preventDefault();
+            var variable = $(this).val();
+            $('#message').val($('#message').val() + variable);
+        });
+    });
+</script>
 </body>
 </html>
