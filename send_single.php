@@ -19,8 +19,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     $draft_id = filter_var($_POST['draft_id'], FILTER_SANITIZE_NUMBER_INT);
 
     if (!empty($mobile) && !empty($message)) {
-        // Simulate sending message (replace with real API call later)
-        $success = "پیامک به شماره $mobile با موفقیت ارسال شد (شبیه‌سازی).";
+        // Add footer text to the message
+        $message .= ' ' . SMS_FOOTER_TEXT;
+
+        // Prepare URL with parameters for Sabanovin API
+        $url = SABANOVIN_BASE_URL . '/sms/send.json?gateway=' . urlencode(SABANOVIN_GATEWAY) . '&to=' . urlencode($mobile) . '&text=' . urlencode($message);
+
+        // Send request to Sabanovin API
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPGET, true);
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        // Check API response
+        if ($http_code == 200) {
+            $response_data = json_decode($response, true);
+            if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
+                $success = "پیامک به شماره $mobile با موفقیت ارسال شد (Batch ID: " . $response_data['batch_id'] . ").";
+            } else {
+                $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
+            }
+        } else {
+            $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
+        }
     } else {
         $error = "شماره موبایل و متن پیام نمی‌توانند خالی باشند.";
     }
@@ -210,3 +234,5 @@ $approved_drafts = $stmt->fetchAll();
         });
     });
 </script>
+</body>
+</html>
