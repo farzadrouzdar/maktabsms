@@ -68,7 +68,9 @@ $user = $stmt->fetch();
                             <p>ارسال پیامک تکی</p>
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li
+
+ class="nav-item">
                         <a href="send_group.php" class="nav-link">
                             <i class="nav-icon fas fa-users"></i>
                             <p>ارسال پیامک گروهی</p>
@@ -96,6 +98,12 @@ $user = $stmt->fetch();
                         <a href="payments.php" class="nav-link">
                             <i class="nav-icon fas fa-list"></i>
                             <p>گزارش پرداخت‌ها</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="logout.php" class="nav-link">
+                            <i class="nav-icon fas fa-sign-out-alt"></i>
+                            <p>خروج</p>
                         </a>
                     </li>
                 </ul>

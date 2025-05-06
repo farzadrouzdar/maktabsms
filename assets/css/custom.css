@@ -37,12 +37,47 @@ body {
     text-align: right;
 }
 
-/* Fix for sidebar icons and text alignment */
+/* Fix for sidebar menu items */
+.nav-sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* Align menu items to the right */
+}
+
 .nav-sidebar .nav-link p {
     margin-right: 10px;
+    margin-left: 0;
+    text-align: right;
+}
+
+.nav-sidebar .nav-icon {
+    margin-left: 10px;
+    margin-right: 0;
+}
+
+/* Fix for login page alignment */
+.login-box .card-body {
+    padding: 20px;
+}
+
+.login-box .input-group {
+    flex-direction: row-reverse; /* Ensure input and icon are RTL */
+}
+
+.login-box .input-group-text {
+    border-radius: 0 5px 5px 0;
+}
+
+.login-box .form-control {
+    border-radius: 5px 0 0 5px;
 }
 
 /* Ensure footer is RTL */
 .main-footer {
     text-align: right;
+}
+
+/* Fix for menu item spacing */
+.nav-sidebar .nav-item {
+    margin-bottom: 5px;
 }
