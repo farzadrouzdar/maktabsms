@@ -1,0 +1,18 @@
+# Ignore configuration files with sensitive data
+config.php
+
+# Ignore vendor and dependencies
+vendor/
+node_modules/
+
+# Ignore environment files
+.env
+
+# Ignore temporary files
+*.log
+*.cache
+*.bak
+*.swp
+
+# Ignore uploaded files
+uploads/
