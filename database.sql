@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 06, 2025 at 12:33 PM
+-- Generation Time: May 07, 2025 at 12:01 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -38,16 +38,27 @@ CREATE TABLE `contacts` (
   `field_1` date DEFAULT NULL,
   `field_2` date DEFAULT NULL,
   `field_3` date DEFAULT NULL,
-  `field_4` date DEFAULT NULL
+  `field_4` date DEFAULT NULL,
+  `field1` varchar(255) DEFAULT NULL,
+  `field2` varchar(255) DEFAULT NULL,
+  `field3` varchar(255) DEFAULT NULL,
+  `field4` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci;
 
 --
 -- Dumping data for table `contacts`
 --
 
-INSERT INTO `contacts` (`id`, `school_id`, `name`, `mobile`, `group_id`, `created_at`, `birth_date`, `field_1`, `field_2`, `field_3`, `field_4`) VALUES
-(1, 1, 'فرزاد روزدار', '09129342383', 1, '2025-05-06 10:26:34', '2025-05-06', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00'),
-(2, 1, 'لاللات', '09356194949', 1, '2025-05-06 10:26:57', '2025-05-06', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00');
+INSERT INTO `contacts` (`id`, `school_id`, `name`, `mobile`, `group_id`, `created_at`, `birth_date`, `field_1`, `field_2`, `field_3`, `field_4`, `field1`, `field2`, `field3`, `field4`) VALUES
+(1, 1, 'فرزاد روزدار', '09129342383', 1, '2025-05-06 10:26:34', '2025-05-06', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', 'کد123', 'مقدار2', 'مقدار3', 'مقدار4'),
+(2, 1, 'لاللات', '09356194949', 1, '2025-05-06 10:26:57', '2025-05-06', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', NULL, NULL, NULL, NULL),
+(3, 1, 'فرزاد روزدار', '09129342383', 2, '2025-05-06 14:19:53', NULL, '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', 'کد123', 'مقدار2', 'مقدار3', 'مقدار4'),
+(4, 1, 'فرزاد دوم', '09209342383', 2, '2025-05-06 14:20:37', NULL, '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', NULL, NULL, NULL, NULL),
+(5, 1, 'فرزاد روزدار', '09129342383', 3, '2025-05-06 21:13:10', '2025-05-07', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', 'کد123', 'مقدار2', 'مقدار3', 'مقدار4'),
+(6, 1, 'مهرزاد روزدار', '09397120080', 3, '2025-05-06 21:13:52', '2025-05-02', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', 'کد456', 'مقدار2', 'مقدار3', 'مقدار4'),
+(7, 1, 'رستا روزدار', '09209342383', 3, '2025-05-06 21:14:17', '2025-05-02', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', 'یمبنتسمیب', 'نستیبنسب', 'نتاسینبا', 'ستینبا'),
+(8, 1, 'رامین روزدار', '09337288808', 3, '2025-05-06 21:22:32', '2025-05-01', '0000-00-00', '0000-00-00', '0000-00-00', '0000-00-00', 'سبسبی', 'سیبسیب', 'نتانت', 'نتانتا'),
+(9, 1, 'سنمیتب', '09356194949', 3, '2025-05-06 21:58:21', '0000-00-00', NULL, NULL, NULL, NULL, 'سیبسیبسیب', '', '', '');
 
 -- --------------------------------------------------------
 
@@ -62,6 +73,14 @@ CREATE TABLE `contact_groups` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `group_name` varchar(100) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci;
+
+--
+-- Dumping data for table `contact_groups`
+--
+
+INSERT INTO `contact_groups` (`id`, `school_id`, `name`, `created_at`, `group_name`) VALUES
+(2, 1, '', '2025-05-06 14:19:39', 'تست فرزد'),
+(3, 1, '', '2025-05-06 21:12:33', 'هوشمند');
 
 -- --------------------------------------------------------
 
@@ -86,7 +105,10 @@ CREATE TABLE `drafts` (
 --
 
 INSERT INTO `drafts` (`id`, `school_id`, `message`, `created_at`, `updated_at`, `group_id`, `title`, `type`, `status`) VALUES
-(1, 1, 'یبلیبل', '2025-05-06 10:23:34', '2025-05-06 10:23:34', NULL, 'سیب', 'simple', 'pending');
+(1, 1, 'یبلیبل', '2025-05-06 10:23:34', '2025-05-06 10:23:34', NULL, 'سیب', 'simple', 'pending'),
+(2, 1, 'سلام.\r\nمن فرزاد هستم - \r\nلغو11', '2025-05-06 10:53:37', '2025-05-06 10:55:32', 4, 'تست پیش نویس', 'simple', 'approved'),
+(3, 1, 'سلام {name}\r\nتولد شما {birth_date} میباشد.', '2025-05-06 16:51:27', '2025-05-06 16:51:27', 4, 'تست', 'smart', 'pending'),
+(4, 1, 'سلام.\r\n{name}\r\n{mobile}\r\n{birth_date}\r\n{field_1}\r\n{field_2}\r\n{field_3}\r\n{field_4}\r\nلغو11', '2025-05-06 21:17:31', '2025-05-06 21:23:46', 5, 'تست هوشمند', 'smart', 'approved');
 
 -- --------------------------------------------------------
 
@@ -100,6 +122,14 @@ CREATE TABLE `draft_groups` (
   `group_name` varchar(100) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci;
+
+--
+-- Dumping data for table `draft_groups`
+--
+
+INSERT INTO `draft_groups` (`id`, `school_id`, `group_name`, `created_at`) VALUES
+(4, 1, 'تست', '2025-05-06 10:53:16'),
+(5, 1, 'هوشمند', '2025-05-06 21:16:40');
 
 -- --------------------------------------------------------
 
@@ -407,25 +437,25 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `contacts`
 --
 ALTER TABLE `contacts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `contact_groups`
 --
 ALTER TABLE `contact_groups`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `drafts`
 --
 ALTER TABLE `drafts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `draft_groups`
 --
 ALTER TABLE `draft_groups`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `phonebook_contacts`
