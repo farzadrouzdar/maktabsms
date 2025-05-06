@@ -28,7 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_draft'])) {
     $title = filter_var($_POST['title'], FILTER_SANITIZE_STRING);
     $message = filter_var($_POST['message'], FILTER_SANITIZE_STRING);
     $type = filter_var($_POST['type'], FILTER_SANITIZE_STRING);
-    if (!empty($title) && !empty($message) && in_array($type, ['simple', 'smart'])) {
+    if (empty($type)) {
+        $error = "لطفاً نوع پیش‌نویس را انتخاب کنید.";
+    } elseif (!empty($title) && !empty($message) && in_array($type, ['simple', 'smart'])) {
         $stmt = $pdo->prepare("INSERT INTO drafts (school_id, group_id, title, message, type, status) VALUES (?, ?, ?, ?, ?, 'pending')");
         $stmt->execute([$school_id, $group_id, $title, $message, $type]);
         $success = "پیش‌نویس با موفقیت ذخیره شد و منتظر تأیید مدیریت است.";
@@ -43,7 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
     $title = filter_var($_POST['title'], FILTER_SANITIZE_STRING);
     $message = filter_var($_POST['message'], FILTER_SANITIZE_STRING);
     $type = filter_var($_POST['type'], FILTER_SANITIZE_STRING);
-    if (!empty($title) && !empty($message) && in_array($type, ['simple', 'smart'])) {
+    if (empty($type)) {
+        $error = "لطفاً نوع پیش‌نویس را انتخاب کنید.";
+    } elseif (!empty($title) && !empty($message) && in_array($type, ['simple', 'smart'])) {
         $stmt = $pdo->prepare("UPDATE drafts SET title = ?, message = ?, type = ?, status = 'pending' WHERE id = ? AND school_id = ? AND group_id = ?");
         $stmt->execute([$title, $message, $type, $draft_id, $school_id, $group_id]);
         $success = "پیش‌نویس با موفقیت به‌روزرسانی شد و منتظر تأیید مدیریت است.";
@@ -241,6 +245,7 @@ if (isset($_POST['insert_variable'])) {
                             <div class="form-group">
                                 <label for="type">نوع پیش‌نویس</label>
                                 <select class="form-control" name="type" id="draft-type" required>
+                                    <option value="" <?php echo !$edit_draft || !$edit_draft['type'] ? 'selected' : ''; ?>>-- انتخاب کنید --</option>
                                     <option value="simple" <?php echo $edit_draft && $edit_draft['type'] == 'simple' ? 'selected' : ''; ?>>ساده</option>
                                     <option value="smart" <?php echo $edit_draft && $edit_draft['type'] == 'smart' ? 'selected' : ''; ?>>هوشمند</option>
                                 </select>
@@ -252,6 +257,8 @@ if (isset($_POST['insert_variable'])) {
                             <div id="variable-section" class="mt-2 <?php echo $edit_draft && $edit_draft['type'] == 'simple' ? 'hidden' : ''; ?>">
                                 <label>فیلدهای اختصاصی:</label>
                                 <button type="submit" name="insert_variable" value="{name}" class="btn btn-sm btn-primary variable-btn">نام</button>
+                                <button type="submit" name="insert_variable" value="{mobile}" class="btn btn-sm btn-primary variable-btn">موبایل</button>
+                                <button type="submit" name="insert_variable" value="{birth_date}" class="btn btn-sm btn-primary variable-btn">تاریخ تولد</button>
                                 <button type="submit" name="insert_variable" value="{field_1}" class="btn btn-sm btn-primary variable-btn">فیلد ۱</button>
                                 <button type="submit" name="insert_variable" value="{field_2}" class="btn btn-sm btn-primary variable-btn">فیلد ۲</button>
                                 <button type="submit" name="insert_variable" value="{field_3}" class="btn btn-sm btn-primary variable-btn">فیلد ۳</button>

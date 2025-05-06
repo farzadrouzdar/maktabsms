@@ -27,18 +27,17 @@ if (!$group) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_contact'])) {
     $name = filter_var($_POST['name'], FILTER_SANITIZE_STRING);
     $mobile = filter_var($_POST['mobile'], FILTER_SANITIZE_STRING);
-    $birth_date = !empty($_POST['birth_date']) ? $_POST['birth_date'] : null;
-    $field_1 = !empty($_POST['field_1']) ? filter_var($_POST['field_1'], FILTER_SANITIZE_STRING) : null;
-    $field_2 = !empty($_POST['field_2']) ? filter_var($_POST['field_2'], FILTER_SANITIZE_STRING) : null;
-    $field_3 = !empty($_POST['field_3']) ? filter_var($_POST['field_3'], FILTER_SANITIZE_STRING) : null;
-    $field_4 = !empty($_POST['field_4']) ? filter_var($_POST['field_4'], FILTER_SANITIZE_STRING) : null;
-
-    if (preg_match('/^09[0-9]{9}$/', $mobile)) {
+    $birth_date = !empty($_POST['birth_date']) ? filter_var($_POST['birth_date'], FILTER_SANITIZE_STRING) : null;
+    $field_1 = filter_var($_POST['field_1'], FILTER_SANITIZE_STRING);
+    $field_2 = filter_var($_POST['field_2'], FILTER_SANITIZE_STRING);
+    $field_3 = filter_var($_POST['field_3'], FILTER_SANITIZE_STRING);
+    $field_4 = filter_var($_POST['field_4'], FILTER_SANITIZE_STRING);
+    if (!empty($name) && !empty($mobile)) {
         $stmt = $pdo->prepare("INSERT INTO contacts (school_id, group_id, name, mobile, birth_date, field_1, field_2, field_3, field_4) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$school_id, $group_id, $name, $mobile, $birth_date, $field_1, $field_2, $field_3, $field_4]);
         $success = "مخاطب با موفقیت اضافه شد.";
     } else {
-        $error = "شماره موبایل نامعتبر است.";
+        $error = "نام و شماره موبایل نمی‌توانند خالی باشند.";
     }
 }
 
@@ -47,24 +46,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_contact'])) {
     $contact_id = filter_var($_POST['contact_id'], FILTER_SANITIZE_NUMBER_INT);
     $name = filter_var($_POST['name'], FILTER_SANITIZE_STRING);
     $mobile = filter_var($_POST['mobile'], FILTER_SANITIZE_STRING);
-    $birth_date = !empty($_POST['birth_date']) ? $_POST['birth_date'] : null;
-    $field_1 = !empty($_POST['field_1']) ? filter_var($_POST['field_1'], FILTER_SANITIZE_STRING) : null;
-    $field_2 = !empty($_POST['field_2']) ? filter_var($_POST['field_2'], FILTER_SANITIZE_STRING) : null;
-    $field_3 = !empty($_POST['field_3']) ? filter_var($_POST['field_3'], FILTER_SANITIZE_STRING) : null;
-    $field_4 = !empty($_POST['field_4']) ? filter_var($_POST['field_4'], FILTER_SANITIZE_STRING) : null;
-
-    if (preg_match('/^09[0-9]{9}$/', $mobile)) {
+    $birth_date = !empty($_POST['birth_date']) ? filter_var($_POST['birth_date'], FILTER_SANITIZE_STRING) : null;
+    $field_1 = filter_var($_POST['field_1'], FILTER_SANITIZE_STRING);
+    $field_2 = filter_var($_POST['field_2'], FILTER_SANITIZE_STRING);
+    $field_3 = filter_var($_POST['field_3'], FILTER_SANITIZE_STRING);
+    $field_4 = filter_var($_POST['field_4'], FILTER_SANITIZE_STRING);
+    if (!empty($name) && !empty($mobile)) {
         $stmt = $pdo->prepare("UPDATE contacts SET name = ?, mobile = ?, birth_date = ?, field_1 = ?, field_2 = ?, field_3 = ?, field_4 = ? WHERE id = ? AND school_id = ? AND group_id = ?");
         $stmt->execute([$name, $mobile, $birth_date, $field_1, $field_2, $field_3, $field_4, $contact_id, $school_id, $group_id]);
         $success = "مخاطب با موفقیت به‌روزرسانی شد.";
     } else {
-        $error = "شماره موبایل نامعتبر است.";
+        $error = "نام و شماره موبایل نمی‌توانند خالی باشند.";
     }
 }
 
 // Handle contact deletion
-if (isset($_GET['delete_contact'])) {
-    $contact_id = filter_var($_GET['delete_contact'], FILTER_SANITIZE_NUMBER_INT);
+if (isset($_GET['delete'])) {
+    $contact_id = filter_var($_GET['delete'], FILTER_SANITIZE_NUMBER_INT);
     $stmt = $pdo->prepare("DELETE FROM contacts WHERE id = ? AND school_id = ? AND group_id = ?");
     $stmt->execute([$contact_id, $school_id, $group_id]);
     $success = "مخاطب با موفقیت حذف شد.";
@@ -87,7 +85,7 @@ if (!empty($search_mobile)) {
     $query .= " AND mobile LIKE ?";
     $params[] = "%$search_mobile%";
 }
-$query .= " ORDER BY name";
+$query .= " ORDER BY created_at DESC";
 
 $stmt = $pdo->prepare($query);
 $stmt->execute($params);
@@ -95,8 +93,8 @@ $contacts = $stmt->fetchAll();
 
 // Fetch contact for editing
 $edit_contact = null;
-if (isset($_GET['edit_contact'])) {
-    $contact_id = filter_var($_GET['edit_contact'], FILTER_SANITIZE_NUMBER_INT);
+if (isset($_GET['edit'])) {
+    $contact_id = filter_var($_GET['edit'], FILTER_SANITIZE_NUMBER_INT);
     $stmt = $pdo->prepare("SELECT * FROM contacts WHERE id = ? AND school_id = ? AND group_id = ?");
     $stmt->execute([$contact_id, $school_id, $group_id]);
     $edit_contact = $stmt->fetch();
@@ -220,47 +218,47 @@ if (isset($_GET['edit_contact'])) {
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>
-                <!-- Contact Management -->
+                <!-- Contact Form -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><?php echo $edit_contact ? 'ویرایش مخاطب' : 'اضافه کردن مخاطب جدید'; ?></h3>
+                        <h3 class="card-title"><?php echo $edit_contact ? 'ویرایش مخاطب' : 'ایجاد مخاطب جدید'; ?></h3>
                     </div>
                     <div class="card-body">
                         <form method="POST">
                             <div class="form-group">
-                                <label for="name">نام و نام خانوادگی</label>
-                                <input type="text" class="form-control" name="name" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['name']) : ''; ?>">
+                                <label for="name">نام</label>
+                                <input type="text" class="form-control" name="name" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['name']) : ''; ?>" required>
                             </div>
                             <div class="form-group">
-                                <label for="mobile">شماره موبایل (الزامی)</label>
+                                <label for="mobile">شماره موبایل</label>
                                 <input type="text" class="form-control" name="mobile" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['mobile']) : ''; ?>" required>
                             </div>
                             <div class="form-group">
                                 <label for="birth_date">تاریخ تولد</label>
-                                <input type="date" class="form-control" name="birth_date" value="<?php echo $edit_contact && $edit_contact['birth_date'] ? $edit_contact['birth_date'] : ''; ?>">
+                                <input type="date" class="form-control" name="birth_date" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['birth_date']) : ''; ?>">
                             </div>
                             <div class="form-group">
                                 <label for="field_1">فیلد ۱</label>
-                                <input type="text" class="form-control" name="field_1" value="<?php echo $edit_contact && $edit_contact['field_1'] ? htmlspecialchars($edit_contact['field_1']) : ''; ?>">
+                                <input type="text" class="form-control" name="field_1" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['field_1']) : ''; ?>">
                             </div>
                             <div class="form-group">
                                 <label for="field_2">فیلد ۲</label>
-                                <input type="text" class="form-control" name="field_2" value="<?php echo $edit_contact && $edit_contact['field_2'] ? htmlspecialchars($edit_contact['field_2']) : ''; ?>">
+                                <input type="text" class="form-control" name="field_2" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['field_2']) : ''; ?>">
                             </div>
                             <div class="form-group">
                                 <label for="field_3">فیلد ۳</label>
-                                <input type="text" class="form-control" name="field_3" value="<?php echo $edit_contact && $edit_contact['field_3'] ? htmlspecialchars($edit_contact['field_3']) : ''; ?>">
+                                <input type="text" class="form-control" name="field_3" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['field_3']) : ''; ?>">
                             </div>
                             <div class="form-group">
                                 <label for="field_4">فیلد ۴</label>
-                                <input type="text" class="form-control" name="field_4" value="<?php echo $edit_contact && $edit_contact['field_4'] ? htmlspecialchars($edit_contact['field_4']) : ''; ?>">
+                                <input type="text" class="form-control" name="field_4" value="<?php echo $edit_contact ? htmlspecialchars($edit_contact['field_4']) : ''; ?>">
                             </div>
                             <?php if ($edit_contact): ?>
                                 <input type="hidden" name="contact_id" value="<?php echo $edit_contact['id']; ?>">
                                 <button type="submit" name="update_contact" class="btn btn-primary">به‌روزرسانی</button>
                                 <a href="contacts.php?group_id=<?php echo $group_id; ?>" class="btn btn-secondary">لغو</a>
                             <?php else: ?>
-                                <button type="submit" name="create_contact" class="btn btn-primary">اضافه کردن</button>
+                                <button type="submit" name="create_contact" class="btn btn-primary">ایجاد مخاطب</button>
                             <?php endif; ?>
                         </form>
                     </div>
@@ -292,14 +290,14 @@ if (isset($_GET['edit_contact'])) {
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>نام و نام خانوادگی</th>
+                                    <th>نام</th>
                                     <th>موبایل</th>
                                     <th>تاریخ تولد</th>
                                     <th>فیلد ۱</th>
                                     <th>فیلد ۲</th>
                                     <th>فیلد ۳</th>
                                     <th>فیلد ۴</th>
-                                    <th>تاریخ اضافه شدن</th>
+                                    <th>تاریخ ایجاد</th>
                                     <th>عملیات</th>
                                 </tr>
                             </thead>
@@ -314,16 +312,15 @@ if (isset($_GET['edit_contact'])) {
                                             <td><?php echo $index + 1; ?></td>
                                             <td><?php echo htmlspecialchars($contact['name']); ?></td>
                                             <td><?php echo htmlspecialchars($contact['mobile']); ?></td>
-                                            <td><?php echo $contact['birth_date'] ? $contact['birth_date'] : '-'; ?></td>
-                                            <td><?php echo $contact['field_1'] ? htmlspecialchars($contact['field_1']) : '-'; ?></td>
-                                            <td><?php echo $contact['field_2'] ? htmlspecialchars($contact['field_2']) : '-'; ?></td>
-                                            <td><?php echo $contact['field_3'] ? htmlspecialchars($contact['field_3']) : '-'; ?></td>
-                                            <td><?php echo $contact['field_4'] ? htmlspecialchars($contact['field_4']) : '-'; ?></td>
+                                            <td><?php echo $contact['birth_date'] ? htmlspecialchars($contact['birth_date']) : '-'; ?></td>
+                                            <td><?php echo htmlspecialchars($contact['field_1'] ?? '-'); ?></td>
+                                            <td><?php echo htmlspecialchars($contact['field_2'] ?? '-'); ?></td>
+                                            <td><?php echo htmlspecialchars($contact['field_3'] ?? '-'); ?></td>
+                                            <td><?php echo htmlspecialchars($contact['field_4'] ?? '-'); ?></td>
                                             <td><?php echo date('Y-m-d H:i:s', strtotime($contact['created_at'])); ?></td>
                                             <td>
-                                                <a href="contacts.php?group_id=<?php echo $group_id; ?>&edit_contact=<?php echo $contact['id']; ?>" class="btn btn-sm btn-warning">ویرایش</a>
-                                                <a href="contacts.php?group_id=<?php echo $group_id; ?>&delete_contact=<?php echo $contact['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این مخاطب را حذف کنید؟');">حذف</a>
-                                                <a href="send_single.php?mobile=<?php echo $contact['mobile']; ?>" class="btn btn-sm btn-info">ارسال پیام</a>
+                                                <a href="contacts.php?group_id=<?php echo $group_id; ?>&edit=<?php echo $contact['id']; ?>" class="btn btn-sm btn-warning">ویرایش</a>
+                                                <a href="contacts.php?group_id=<?php echo $group_id; ?>&delete=<?php echo $contact['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این مخاطب را حذف کنید؟');">حذف</a>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
