@@ -1,4 +1,0 @@
-Invalid Persian Start: 'با سلام.'
-Invalid Persian Start: null
-Input Message: null
-Empty Message Detected
