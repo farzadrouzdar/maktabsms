@@ -145,7 +145,7 @@ $total_contacts = $stmt->fetch()['total'];
                 <p>خوش آمدید، <?php echo htmlspecialchars($user['name']); ?>!</p>
                 <!-- Statistic Widgets -->
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-sm-6">
                         <div class="info-box">
                             <span class="info-box-icon bg-info"><i class="fas fa-wallet"></i></span>
                             <div class="info-box-content">
@@ -154,7 +154,7 @@ $total_contacts = $stmt->fetch()['total'];
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-sm-6">
                         <div class="info-box">
                             <span class="info-box-icon bg-success"><i class="fas fa-comment"></i></span>
                             <div class="info-box-content">
@@ -163,7 +163,7 @@ $total_contacts = $stmt->fetch()['total'];
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 col-sm-6">
                         <div class="info-box">
                             <span class="info-box-icon bg-warning"><i class="fas fa-users"></i></span>
                             <div class="info-box-content">

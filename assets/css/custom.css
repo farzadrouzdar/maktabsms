@@ -8,6 +8,8 @@ body {
 .main-sidebar {
     right: 0 !important; /* Move sidebar to the right */
     left: auto !important;
+    width: 250px; /* Fixed width for sidebar */
+    transition: width 0.3s ease; /* Smooth transition for responsive design */
 }
 
 .main-header .navbar {
@@ -18,10 +20,12 @@ body {
 .content-wrapper {
     margin-right: 250px !important; /* Adjust for right sidebar */
     margin-left: auto !important;
+    transition: margin-right 0.3s ease; /* Smooth transition for responsive design */
 }
 
 .login-box, .register-box {
     margin: 7% auto;
+    max-width: 400px; /* Limit max width for better mobile view */
 }
 
 .card-body {
@@ -43,7 +47,7 @@ body {
     align-items: center;
     justify-content: flex-end; /* Align menu items to the right */
     text-align: right;
-    padding-right: 20px;
+    padding-right: 10px; /* Reduce padding to bring closer to edge */
 }
 
 .nav-sidebar .nav-link p {
@@ -90,6 +94,7 @@ body {
 .info-box {
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 15px;
 }
 
 .info-box-icon {
@@ -104,4 +109,40 @@ body {
 .info-box-number {
     font-size: 1.5rem;
     font-weight: bold;
+}
+
+/* Responsive Design */
+@media (max-width: 767px) {
+    .main-sidebar {
+        width: 0; /* Hide sidebar on mobile */
+        display: none;
+    }
+    .content-wrapper {
+        margin-right: 0 !important; /* Remove margin when sidebar is hidden */
+    }
+    .sidebar-open .main-sidebar {
+        width: 250px; /* Show sidebar when toggle is clicked */
+        display: block;
+    }
+    .login-box, .register-box {
+        margin: 5% auto; /* Adjust margin for mobile */
+    }
+    .info-box {
+        margin: 10px 0; /* Adjust spacing for mobile */
+    }
+    .info-box-content {
+        padding-right: 10px;
+    }
+    .info-box-number {
+        font-size: 1.2rem; /* Smaller font on mobile */
+    }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+    .main-sidebar {
+        width: 200px; /* Slightly narrower sidebar for tablets */
+    }
+    .content-wrapper {
+        margin-right: 200px !important;
+    }
 }
