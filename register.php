@@ -80,7 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>ثبت‌نام مرکز آموزشی - سامانه پیامک مدارس</title>
     <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
     <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css"> <!-- Add RTL support -->
+    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
+    <link rel="stylesheet" href="assets/css/custom.css"> <!-- Custom CSS -->
 </head>
 <body class="hold-transition register-page">
 <div class="register-box">
@@ -137,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <span class="fas fa-id-card"></span>
                         </div>
                     </div>
-            </div>
+                </div>
                 <div class="input-group mb-3">
                     <select class="form-control" name="province" required>
                         <?php foreach ($provinces as $province): ?>
@@ -235,20 +236,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="input-group mb-3">
                     <input type="text" class="form-control" placeholder="کد ملی معاون" name="deputy_national_id">
                     <div class="input-group-append">
-                        <div class huntington.php(404.php) disease is a rare genetic disorder that affects the nervous system, causing progressive degeneration of nerve cells in the brain. If you meant something else by "Huntington," please provide more context, and I'll tailor the response accordingly!
-
-If you're referring to **Huntington's disease**, here's a concise overview:
-
-### Huntington's Disease
-- **Definition**: A genetic disorder caused by a mutation in the huntingtin gene, leading to the progressive breakdown of nerve cells in the brain.
-- **Symptoms**: 
-  - Movement disorders (e.g., involuntary jerking or writhing movements called chorea).
-  - Cognitive decline (e.g., difficulty organizing tasks, memory lapses).
-  - Psychiatric issues (e.g., depression, irritability, or obsessive-compulsive behaviors).
-- **Inheritance**: Autosomal dominant, meaning a child of an affected parent has a 50% chance of inheriting the disease.
-- **Onset**: Typically appears in adulthood (30s–40s), though juvenile forms exist.
-- **Diagnosis**: Genetic testing can confirm the presence of the mutated gene.
-- **Treatment**: No cure exists, but treatments can manage symptoms (e.g., medications for movement or psychiatric issues, therapy).
-- **Prognosis**: Progressive, with life expectancy of 15–20 years after symptom onset.
-
-If you'd lika more detailed explanation, data (e.g., prevalence: ~5–10 per 100,000 people in Western populations), or specifics (e.g., genetic mechanisms, current research), let me know! Alternatively, if you meant something else by "Huntington," please clarify.
+                        <div class="input-group-text">
+                            <span class="fas fa-id-card"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group mb-3">
+                    <input type="date" class="form-control" placeholder="تاریخ تولد معاون" name="deputy_birth_date">
+                    <div class="input-group-append">
+                        <div class="input-group-text">
+                            <span class="fas fa-calendar"></span>
+                        </div>
+                    </div>
+                </div>
+                <h5>نامه درخواست</h5>
+                <p><a href="request_letter_template.pdf" download>دانلود قالب نامه درخواست</a></p>
+                <div class="input-group mb-3">
+                    <input type="file" class="form-control" name="request_letter" accept=".pdf" required>
+                    <div class="input-group-append">
+                        <div class="input-group-text">
+                            <span class="fas fa-upload"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary btn-block">ثبت‌نام</button>
+                    </div>
+                </div>
+            </form>
+            <p class="mt-3"><a href="index.php">بازگشت به ورود</a></p>
+        </div>
+    </div>
+</div>
+<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+</body>
+</html>

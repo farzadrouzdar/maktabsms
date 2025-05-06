@@ -19,7 +19,8 @@ $user = $stmt->fetch();
     <title>داشبورد - سامانه پیامک مدارس</title>
     <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
     <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css"> <!-- Add RTL support -->
+    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
+    <link rel="stylesheet" href="assets/css/custom.css"> <!-- Custom CSS -->
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">

@@ -76,10 +76,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ورود به سامانه پیامک مدارس</title>
-    <!-- PersianAdminLTE CSS -->
     <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
     <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css"> <!-- Add RTL support -->
+    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
+    <link rel="stylesheet" href="assets/css/custom.css"> <!-- Custom CSS -->
 </head>
 <body class="hold-transition login-page">
 <div class="login-box">
@@ -130,7 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </div>
-<!-- PersianAdminLTE JS -->
 <script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
 <script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="assets/adminlte/dist/js/adminlte.min.js"></script>
