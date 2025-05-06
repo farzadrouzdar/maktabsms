@@ -1,0 +1,17 @@
+Send OTP - Mobile: 09129342383, OTP: 535266, Expires: 2025-05-03 21:36:47
+Verify OTP - Mobile: 09129342383, OTP: 535266, Found: No
+Send OTP - Mobile: 09129342383, OTP: 935591, Expires: 2025-05-03 21:37:31
+Verify OTP - Mobile: 09129342383, OTP: 935591, Found: No
+Send OTP - Mobile: 09129342383, OTP: 729966, Expires: 2025-05-03 21:39:46
+Verify OTP - Mobile: 09129342383, OTP: 729966, Found: No
+Send OTP - Mobile: 09129342383, OTP: 674876, Expires: 2025-05-03 21:49:46
+Verify OTP - Mobile: 09129342383, Entered OTP: 674876, Found: No, Last Stored OTP: 674876, Expires: 2025-05-03 21:49:46
+Send OTP - Mobile: 09129342383, OTP: 296891, Expires: 2025-05-03 21:51:20
+Verify OTP - Mobile: 09129342383, Entered OTP: 296891, Found: No, Last Stored OTP: 296891, Expires: 2025-05-03 21:51:20
+Send OTP - Mobile: 09129342383, OTP: 510668, Expires: 2025-05-03 21:57:38
+Verify OTP - Mobile: 09129342383, Entered OTP: 510668, Found: No, Stored OTP: 510668, Expires: 2025-05-03 21:57:38
+2025-05-04 00:10:33 - Mobile: 09129342383, OTP: 140825, SMS Result: null
+2025-05-04 00:16:58 - Mobile: 09129342383, OTP: 184988, SMS Result: {"status":"error","message":"\u062e\u0637\u0627 \u062f\u0631 \u0627\u0631\u062a\u0628\u0627\u0637 \u0628\u0627 \u0633\u0631\u0648\u0631 \u0635\u0628\u0627\u0646\u0648\u06cc\u0646. \u06a9\u062f HTTP: 404. \u062e\u0637\u0627: "}
+2025-05-04 00:20:59 - Mobile: 09129342383, OTP: 530909, SMS Result: {"batch_id":121772057,"entries":[{"reference_id":692356367,"mobile":"9129342383","status":"ENQUEUED","datetime":"2025-05-04 01:50:59"}],"status":{"code":200,"message":"\u062a\u0627\u06cc\u06cc\u062f \u0634\u062f"}}
+2025-05-04 06:45:44 - Mobile: 09129342383, OTP: 740197, SMS Result: {"batch_id":121775054,"entries":[{"reference_id":692360961,"mobile":"9129342383","status":"ENQUEUED","datetime":"2025-05-04 08:15:44"}],"status":{"code":200,"message":"\u062a\u0627\u06cc\u06cc\u062f \u0634\u062f"}}
+2025-05-04 07:49:27 - Mobile: 09129342383, OTP: 881847, SMS Result: {"batch_id":121779383,"entries":[{"reference_id":692372543,"mobile":"9129342383","status":"ENQUEUED","datetime":"2025-05-04 09:19:27"}],"status":{"code":200,"message":"\u062a\u0627\u06cc\u06cc\u062f \u0634\u062f"}}
