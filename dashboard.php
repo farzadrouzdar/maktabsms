@@ -10,6 +10,25 @@ if (!isset($_SESSION['user_id'])) {
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+
+// Get school_id for the user
+$school_id = $user['school_id'];
+
+// Get balance
+$stmt = $pdo->prepare("SELECT balance FROM schools WHERE id = ?");
+$stmt->execute([$school_id]);
+$school = $stmt->fetch();
+$balance = $school['balance'];
+
+// Get total sent SMS
+$stmt = $pdo->prepare("SELECT COUNT(*) as total FROM sms_logs WHERE school_id = ? AND status = 'sent'");
+$stmt->execute([$school_id]);
+$total_sms = $stmt->fetch()['total'];
+
+// Get total contacts
+$stmt = $pdo->prepare("SELECT COUNT(*) as total FROM contacts WHERE school_id = ?");
+$stmt->execute([$school_id]);
+$total_contacts = $stmt->fetch()['total'];
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -39,7 +58,7 @@ $user = $stmt->fetch();
     </nav>
     <!-- Main Sidebar -->
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
-        <a href="#" class="brand-link">
+        <a href="dashboard.php" class="brand-link">
             <span class="brand-text font-weight-light">maktabsms</span>
         </a>
         <div class="sidebar">
@@ -50,6 +69,12 @@ $user = $stmt->fetch();
             </div>
             <nav class="mt-2">
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+                    <li class="nav-item">
+                        <a href="dashboard.php" class="nav-link active">
+                            <i class="nav-icon fas fa-tachometer-alt"></i>
+                            <p>داشبورد</p>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a href="phonebook.php" class="nav-link">
                             <i class="nav-icon fas fa-address-book"></i>
@@ -68,9 +93,7 @@ $user = $stmt->fetch();
                             <p>ارسال پیامک تکی</p>
                         </a>
                     </li>
-                    <li
-
- class="nav-item">
+                    <li class="nav-item">
                         <a href="send_group.php" class="nav-link">
                             <i class="nav-icon fas fa-users"></i>
                             <p>ارسال پیامک گروهی</p>
@@ -120,6 +143,36 @@ $user = $stmt->fetch();
         <section class="content">
             <div class="container-fluid">
                 <p>خوش آمدید، <?php echo htmlspecialchars($user['name']); ?>!</p>
+                <!-- Statistic Widgets -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-wallet"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">مانده شارژ</span>
+                                <span class="info-box-number"><?php echo number_format($balance, 2); ?> تومان</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-comment"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">پیامک‌های ارسال‌شده</span>
+                                <span class="info-box-number"><?php echo number_format($total_sms); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-users"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">تعداد مخاطبین</span>
+                                <span class="info-box-number"><?php echo number_format($total_contacts); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </div>
