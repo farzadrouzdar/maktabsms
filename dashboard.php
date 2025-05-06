@@ -19,8 +19,9 @@ $user = $stmt->fetch();
     <title>داشبورد - سامانه پیامک مدارس</title>
     <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
     <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css"> <!-- Add RTL support -->
 </head>
-<body class="hold-transition sidebar-mini">
+<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
@@ -92,7 +93,7 @@ $user = $stmt->fetch();
                     </li>
                     <li class="nav-item">
                         <a href="payments.php" class="nav-link">
-                            <i class=" AscendingList.php"></i>
+                            <i class="nav-icon fas fa-list"></i>
                             <p>گزارش پرداخت‌ها</p>
                         </a>
                     </li>
@@ -115,7 +116,7 @@ $user = $stmt->fetch();
     </div>
     <!-- Footer -->
     <footer class="main-footer">
-        <strong>maktabsms &copy; <?php echo date('Y'); ?></strong>
+        <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
 <script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>

@@ -25,17 +25,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // For local testing
             $response = curl_exec($ch);
-            curl_close($ch);
-
-            $result = json_decode($response, true);
-            if ($result['status']['code'] == 200) {
-                $_SESSION['step'] = 'verify';
-                header('Location: index.php');
-                exit;
+            
+            if ($response === false) {
+                $error = "خطا در اتصال به سرویس پیامک: " . curl_error($ch);
+                file_put_contents('sms_error.log', date('Y-m-d H:i:s') . " - cURL Error: " . curl_error($ch) . "\n", FILE_APPEND);
             } else {
-                $error = "خطا در ارسال کد. لطفاً دوباره تلاش کنید.";
+                $result = json_decode($response, true);
+                if (isset($result['status']['code']) && $result['status']['code'] == 200) {
+                    $_SESSION['step'] = 'verify';
+                    header('Location: index.php');
+                    exit;
+                } else {
+                    $error = "خطا در ارسال پیامک: " . ($result['status']['message'] ?? 'پاسخ نامعتبر');
+                    file_put_contents('sms_error.log', date('Y-m-d H:i:s') . " - API Response: " . $response . "\n", FILE_APPEND);
+                }
             }
+            curl_close($ch);
         } else {
             $error = "شماره موبایل نامعتبر است.";
         }
@@ -69,8 +76,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ورود به سامانه پیامک مدارس</title>
+    <!-- PersianAdminLTE CSS -->
     <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
     <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css"> <!-- Add RTL support -->
 </head>
 <body class="hold-transition login-page">
 <div class="login-box">
@@ -80,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card">
         <div class="card-body login-card-body">
             <?php if (isset($error)): ?>
-                <p class="text-danger"><?php echo $error; ?></p>
+                <p class="text-danger"><?php echo htmlspecialchars($error); ?></p>
             <?php endif; ?>
             <?php if (isset($_SESSION['step']) && $_SESSION['step'] === 'verify'): ?>
                 <p class="login-box-msg">کد یک‌بارمصرف ارسال‌شده را وارد کنید</p>
@@ -121,6 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </div>
+<!-- PersianAdminLTE JS -->
 <script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
 <script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="assets/adminlte/dist/js/adminlte.min.js"></script>
