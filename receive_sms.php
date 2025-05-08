@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once 'menus.php'; // اضافه کردن فایل منوها
 session_start();
 
 if (!isset($_SESSION['user_id'])) {
@@ -115,66 +116,14 @@ $messages = $stmt->fetchAll();
             </div>
             <nav class="mt-2">
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-                    <li class="nav-item">
-                        <a href="dashboard.php" class="nav-link">
-                            <i class="nav-icon fas fa-tachometer-alt"></i>
-                            <p>داشبورد</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="phonebook.php" class="nav-link">
-                            <i class="nav-icon fas fa-address-book"></i>
-                            <p>دفترچه تلفن</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="drafts.php" class="nav-link">
-                            <i class="nav-icon fas fa-file-alt"></i>
-                            <p>پیش‌نویس‌ها</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="send_single.php" class="nav-link">
-                            <i class="nav-icon fas fa-comment"></i>
-                            <p>ارسال پیامک تکی</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="send_group.php" class="nav-link">
-                            <i class="nav-icon fas fa-users"></i>
-                            <p>ارسال پیامک گروهی</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="send_smart.php" class="nav-link">
-                            <i class="nav-icon fas fa-brain"></i>
-                            <p>ارسال پیامک هوشمند</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="receive_sms.php" class="nav-link active">
-                            <i class="nav-icon fas fa-inbox"></i>
-                            <p>دریافت پیامک</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="charge.php" class="nav-link">
-                            <i class="nav-icon fas fa-wallet"></i>
-                            <p>شارژ پیامک</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="payments.php" class="nav-link">
-                            <i class="nav-icon fas fa-list"></i>
-                            <p>گزارش پرداخت‌ها</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="logout.php" class="nav-link">
-                            <i class="nav-icon fas fa-sign-out-alt"></i>
-                            <p>خروج</p>
-                        </a>
-                    </li>
+                    <?php foreach ($menus as $key => $menu): ?>
+                        <li class="nav-item">
+                            <a href="<?php echo $menu['url']; ?>" class="nav-link <?php if (basename($_SERVER['PHP_SELF']) == basename($menu['url'])) echo 'active'; ?>">
+                                <i class="nav-icon <?php echo $menu['icon']; ?>"></i>
+                                <p><?php echo $menu['title']; ?></p>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
                 </ul>
             </nav>
         </div>

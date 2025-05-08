@@ -11,6 +11,6 @@ $menus = [
     'receive_sms' => ['title' => 'دریافت پیامک', 'icon' => 'fas fa-inbox', 'url' => 'receive_sms.php'],
     'charge' => ['title' => 'شارژ پیامک', 'icon' => 'fas fa-wallet', 'url' => 'charge.php'],
     'payments' => ['title' => 'گزارش پرداخت‌ها', 'icon' => 'fas fa-list', 'url' => 'payments.php'],
-    'transactions' => ['title' => 'تراکنش ها', 'icon' => 'fas fa-wallet', 'url' => 'transactions.php'],
+    'transactions' => ['title' => ' تراکنش ها', 'icon' => 'fas fa-wallet', 'url' => 'transactions.php'],
     'logout' => ['title' => 'خروج', 'icon' => 'fas fa-sign-out-alt', 'url' => 'logout.php'],
 ];
