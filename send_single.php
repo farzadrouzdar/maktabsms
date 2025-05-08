@@ -12,6 +12,22 @@ $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 $school_id = $user['school_id'];
 
+// Function to get current balance
+function get_balance($pdo, $school_id) {
+    $stmt = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) -
+            SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as balance
+        FROM transactions
+        WHERE school_id = ? AND status = 'successful'
+    ");
+    $stmt->execute([$school_id]);
+    return $stmt->fetch()['balance'] ?? 0;
+}
+
+// Get initial balance
+$balance = get_balance($pdo, $school_id);
+
 // Handle sending message
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     $mobile = filter_var($_POST['mobile'], FILTER_SANITIZE_STRING);
@@ -19,31 +35,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     $draft_id = filter_var($_POST['draft_id'], FILTER_SANITIZE_NUMBER_INT);
 
     if (!empty($mobile) && !empty($message)) {
-        // Add footer text to the message
-        $message .= ' ' . SMS_FOOTER_TEXT;
+        // Calculate SMS cost based on message length
+        $message_length = mb_strlen($message, 'UTF-8');
+        $sms_parts = 1;
+        if ($message_length > SMS_MAX_CHARS_PART1) {
+            $remaining_chars = $message_length - SMS_MAX_CHARS_PART1;
+            $sms_parts += ceil($remaining_chars / SMS_MAX_CHARS_OTHER);
+        }
+        $sms_cost = $sms_parts * SMS_COST_PER_PART;
 
-        // Prepare URL with parameters for Sabanovin API
-        $url = SABANOVIN_BASE_URL . '/sms/send.json?gateway=' . urlencode(SABANOVIN_GATEWAY) . '&to=' . urlencode($mobile) . '&text=' . urlencode($message);
+        // Get current balance before sending
+        $current_balance = get_balance($pdo, $school_id);
 
-        // Send request to Sabanovin API
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPGET, true);
+        // Check if balance is sufficient
+        if ($current_balance >= $sms_cost) {
+            // Add footer text to the message
+            $message .= ' ' . SMS_FOOTER_TEXT;
 
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            // Prepare URL with parameters for Sabanovin API
+            $url = SABANOVIN_BASE_URL . '/sms/send.json?gateway=' . urlencode(SABANOVIN_GATEWAY) . '&to=' . urlencode($mobile) . '&text=' . urlencode($message);
 
-        // Check API response
-        if ($http_code == 200) {
-            $response_data = json_decode($response, true);
-            if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
-                $success = "پیامک به شماره $mobile با موفقیت ارسال شد (Batch ID: " . $response_data['batch_id'] . ").";
+            // Send request to Sabanovin API
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPGET, true);
+
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            // Check API response
+            if ($http_code == 200) {
+                $response_data = json_decode($response, true);
+                if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
+                    // Register transaction
+                    $stmt = $pdo->prepare("
+                        INSERT INTO transactions (school_id, amount, status, created_at, details, type)
+                        VALUES (?, ?, 'successful', NOW(), 'ارسال پیامک', 'debit')
+                    ");
+                    $stmt->execute([$school_id, $sms_cost]);
+
+                    $success = "پیامک به شماره $mobile با موفقیت ارسال شد (Batch ID: " . $response_data['batch_id'] . "). هزینه: " . number_format($sms_cost) . " تومان.";
+
+                    // Update balance after successful send
+                    $balance = get_balance($pdo, $school_id);
+                } else {
+                    $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
+                }
             } else {
-                $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
+                $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
             }
         } else {
-            $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
+            $error = "مانده شارژ کافی نیست. لطفاً حساب خود را شارژ کنید. هزینه این پیامک: " . number_format($sms_cost) . " تومان.";
         }
     } else {
         $error = "شماره موبایل و متن پیام نمی‌توانند خالی باشند.";
@@ -68,7 +111,6 @@ $approved_drafts = $stmt->fetchAll();
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
-    <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
             <li class="nav-item">
@@ -81,7 +123,6 @@ $approved_drafts = $stmt->fetchAll();
             </li>
         </ul>
     </nav>
-    <!-- Main Sidebar -->
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
             <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
@@ -143,6 +184,12 @@ $approved_drafts = $stmt->fetchAll();
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="transactions.php" class="nav-link">
+                            <i class="nav-icon fas fa-exchange-alt"></i>
+                            <p>تراکنش‌ها</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="payments.php" class="nav-link">
                             <i class="nav-icon fas fa-list"></i>
                             <p>گزارش پرداخت‌ها</p>
@@ -158,7 +205,6 @@ $approved_drafts = $stmt->fetchAll();
             </nav>
         </div>
     </aside>
-    <!-- Content Wrapper -->
     <div class="content-wrapper">
         <section class="content-header">
             <div class="container-fluid">
@@ -167,13 +213,13 @@ $approved_drafts = $stmt->fetchAll();
         </section>
         <section class="content">
             <div class="container-fluid">
+                <p>مانده شارژ: <?php echo number_format(get_balance($pdo, $school_id), 2); ?> تومان</p>
                 <?php if (isset($success)): ?>
                     <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
                 <?php endif; ?>
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>
-                <!-- Send Single Form -->
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">ارسال پیامک به شماره دلخواه</h3>
@@ -207,7 +253,6 @@ $approved_drafts = $stmt->fetchAll();
             </div>
         </section>
     </div>
-    <!-- Footer -->
     <footer class="main-footer">
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>

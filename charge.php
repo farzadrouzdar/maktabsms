@@ -12,11 +12,21 @@ $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 $school_id = $user['school_id'];
 
-// گرفتن موجودی مدرسه
-$stmt = $pdo->prepare("SELECT balance FROM schools WHERE id = ?");
-$stmt->execute([$school_id]);
-$school = $stmt->fetch();
-$balance = $school['balance'] ?? 0;
+// Function to get current balance from transactions
+function get_balance($pdo, $school_id) {
+    $stmt = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) -
+            SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as balance
+        FROM transactions
+        WHERE school_id = ? AND status = 'successful'
+    ");
+    $stmt->execute([$school_id]);
+    return $stmt->fetch()['balance'] ?? 0;
+}
+
+// Get current balance
+$balance = get_balance($pdo, $school_id);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
     $amount = filter_var($_POST['amount'], FILTER_SANITIZE_NUMBER_INT);
@@ -72,7 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
-    <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
             <li class="nav-item">
@@ -85,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
             </li>
         </ul>
     </nav>
-    <!-- Main Sidebar -->
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
             <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
@@ -147,6 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="transactions.php" class="nav-link">
+                            <i class="nav-icon fas fa-exchange-alt"></i>
+                            <p>تراکنش‌ها</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="payments.php" class="nav-link">
                             <i class="nav-icon fas fa-list"></i>
                             <p>گزارش پرداخت‌ها</p>
@@ -162,7 +176,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
             </nav>
         </div>
     </aside>
-    <!-- Content Wrapper -->
     <div class="content-wrapper">
         <section class="content-header">
             <div class="container-fluid">
@@ -176,18 +189,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
                 <?php endif; ?>
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">موجودی فعلی مدرسه: <?php echo number_format($balance); ?> تومان</h3>
+                        <h3 class="card-title">موجودی فعلی: <?php echo number_format(get_balance($pdo, $school_id)); ?> تومان</h3>
                     </div>
                     <div class="card-body">
                         <form method="POST">
                             <div class="form-group">
                                 <label for="amount">مبلغ شارژ (تومان)</label>
                                 <select class="form-control" name="amount" id="amount" required>
-                                    <option value="1000">1000 تومان</option>
-                                    <option value="5000">5000 تومان</option>
-                                    <option value="10000">10000 تومان</option>
-                                    <option value="20000">20000 تومان</option>
-                                    <option value="50000">50000 تومان</option>
+                                    <option value="1000">1,000 تومان</option>
+                                    <option value="5000">5,000 تومان</option>
+                                    <option value="10000">10,000 تومان</option>
+                                    <option value="20000">20,000 تومان</option>
+                                    <option value="50000">50,000 تومان</option>
                                 </select>
                             </div>
                             <button type="submit" name="charge" class="btn btn-primary">پرداخت و شارژ</button>
@@ -197,7 +210,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
             </div>
         </section>
     </div>
-    <!-- Footer -->
     <footer class="main-footer">
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>

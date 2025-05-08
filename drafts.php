@@ -47,18 +47,6 @@ if (isset($_GET['delete_group'])) {
     exit;
 }
 
-// Fetch all groups with draft count
-$stmt = $pdo->prepare("
-    SELECT dg.id, dg.school_id, dg.group_name, dg.created_at, COUNT(d.id) as draft_count 
-    FROM draft_groups dg 
-    LEFT JOIN drafts d ON dg.id = d.group_id AND d.school_id = ? 
-    WHERE dg.school_id = ? 
-    GROUP BY dg.id, dg.group_name, dg.created_at 
-    ORDER BY dg.group_name
-");
-$stmt->execute([$school_id, $school_id]);
-$groups = $stmt->fetchAll();
-
 // Fetch group for editing
 $edit_group = null;
 if (isset($_GET['edit_group'])) {
@@ -66,6 +54,52 @@ if (isset($_GET['edit_group'])) {
     $stmt = $pdo->prepare("SELECT * FROM draft_groups WHERE id = ? AND school_id = ?");
     $stmt->execute([$group_id, $school_id]);
     $edit_group = $stmt->fetch();
+}
+
+// Fetch draft for editing
+$edit_draft = null;
+if (isset($_GET['edit_draft'])) {
+    $draft_id = filter_var($_GET['edit_draft'], FILTER_SANITIZE_NUMBER_INT);
+    $stmt_edit_draft = $pdo->prepare("SELECT * FROM drafts WHERE id = ? AND school_id = ?");
+    $stmt_edit_draft->execute([$draft_id, $school_id]);
+    $edit_draft = $stmt_edit_draft->fetch();
+
+    if (!$edit_draft) {
+        header('Location: drafts.php');
+        exit;
+    }
+}
+
+// Handle draft deletion
+if (isset($_GET['delete_draft'])) {
+    $draft_id = filter_var($_GET['delete_draft'], FILTER_SANITIZE_NUMBER_INT);
+    $stmt_delete_draft = $pdo->prepare("DELETE FROM drafts WHERE id = ? AND school_id = ?");
+    $stmt_delete_draft->execute([$draft_id, $school_id]);
+    $success = "پیش‌نویس با موفقیت حذف شد.";
+    header('Location: drafts.php');
+    exit;
+}
+
+// Handle draft update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
+    $draft_id_update = filter_var($_POST['draft_id'], FILTER_SANITIZE_NUMBER_INT);
+    $title = filter_var($_POST['title'], FILTER_SANITIZE_STRING);
+    $message = filter_var($_POST['message'], FILTER_SANITIZE_STRING);
+    $type = filter_var($_POST['type'], FILTER_SANITIZE_STRING);
+
+    if (!empty($title) && !empty($message) && in_array($type, ['simple', 'smart'])) {
+        $stmt_update_draft = $pdo->prepare("
+            UPDATE drafts
+            SET title = ?, message = ?, type = ?, updated_at = NOW()
+            WHERE id = ? AND school_id = ?
+        ");
+        $stmt_update_draft->execute([$title, $message, $type, $draft_id_update, $school_id]);
+        $success = "پیش‌نویس با موفقیت به‌روزرسانی شد.";
+        header('Location: drafts.php');
+        exit;
+    } else {
+        $error = "لطفاً تمام فیلدها را به درستی وارد کنید.";
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -81,7 +115,6 @@ if (isset($_GET['edit_group'])) {
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
-    <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
             <li class="nav-item">
@@ -94,7 +127,6 @@ if (isset($_GET['edit_group'])) {
             </li>
         </ul>
     </nav>
-    <!-- Main Sidebar -->
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
             <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
@@ -171,7 +203,6 @@ if (isset($_GET['edit_group'])) {
             </nav>
         </div>
     </aside>
-    <!-- Content Wrapper -->
     <div class="content-wrapper">
         <section class="content-header">
             <div class="container-fluid">
@@ -186,58 +217,122 @@ if (isset($_GET['edit_group'])) {
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>
-                <!-- Group Management -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title"><?php echo $edit_group ? 'ویرایش گروه' : 'ایجاد گروه جدید'; ?></h3>
+
+                <?php if (!$edit_group && !$edit_draft): ?>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">ایجاد گروه جدید</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <div class="form-group">
+                                    <label for="group_name">نام گروه</label>
+                                    <input type="text" class="form-control" name="group_name" required>
+                                </div>
+                                <button type="submit" name="create_group" class="btn btn-primary">ایجاد گروه</button>
+                            </form>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <form method="POST">
-                            <div class="form-group">
-                                <label for="group_name">نام گروه</label>
-                                <input type="text" class="form-control" name="group_name" value="<?php echo $edit_group ? htmlspecialchars($edit_group['group_name']) : ''; ?>" required>
-                            </div>
-                            <?php if ($edit_group): ?>
+                <?php elseif ($edit_group): ?>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">ویرایش گروه</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <div class="form-group">
+                                    <label for="group_name">نام گروه</label>
+                                    <input type="text" class="form-control" name="group_name" value="<?php echo htmlspecialchars($edit_group['group_name']); ?>" required>
+                                </div>
                                 <input type="hidden" name="group_id" value="<?php echo $edit_group['id']; ?>">
                                 <button type="submit" name="update_group" class="btn btn-primary">به‌روزرسانی</button>
                                 <a href="drafts.php" class="btn btn-secondary">لغو</a>
-                            <?php else: ?>
-                                <button type="submit" name="create_group" class="btn btn-primary">ایجاد گروه</button>
-                            <?php endif; ?>
-                        </form>
+                            </form>
+                        </div>
                     </div>
-                </div>
-                <!-- Groups List -->
+                <?php endif; ?>
+
+                <?php if ($edit_draft): ?>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">ویرایش پیش‌نویس</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <div class="form-group">
+                                    <label for="title">عنوان</label>
+                                    <input type="text" class="form-control" name="title" value="<?php echo htmlspecialchars($edit_draft['title']); ?>" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="message">پیام</label>
+                                    <textarea class="form-control" name="message" rows="5" required><?php echo htmlspecialchars($edit_draft['message']); ?></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="type">نوع پیش‌نویس</label>
+                                    <select class="form-control" name="type" required>
+                                        <option value="simple" <?php if ($edit_draft['type'] === 'simple') echo 'selected'; ?>>ساده</option>
+                                        <option value="smart" <?php if ($edit_draft['type'] === 'smart') echo 'selected'; ?>>هوشمند</option>
+                                    </select>
+                                </div>
+                                <input type="hidden" name="draft_id" value="<?php echo $edit_draft['id']; ?>">
+                                <button type="submit" name="update_draft" class="btn btn-primary">ذخیره تغییرات</button>
+                                <a href="drafts.php" class="btn btn-secondary">لغو</a>
+                            </form>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">لیست گروه‌ها</h3>
+                        <h3 class="card-title">لیست پیش‌نویس‌های تایید شده</h3>
                     </div>
                     <div class="card-body">
                         <table class="table table-bordered">
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>نام گروه</th>
-                                    <th>تعداد پیش‌نویس‌ها</th>
+                                    <th>عنوان</th>
+                                    <th>نوع پیش‌نویس</th>
+                                    <th>پیام</th>
                                     <th>تاریخ ایجاد</th>
                                     <th>عملیات</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if (empty($groups)): ?>
+                                <?php
+                                $stmt_drafts = $pdo->prepare("
+                                    SELECT
+                                        id,
+                                        title,
+                                        message,
+                                        created_at,
+                                        CASE type
+                                            WHEN 'simple' THEN 'ساده'
+                                            WHEN 'smart' THEN 'هوشمند'
+                                            ELSE '-'
+                                        END AS type_fa
+                                    FROM drafts
+                                    WHERE school_id = ? AND status = 'approved'
+                                    ORDER BY created_at DESC
+                                ");
+                                $stmt_drafts->execute([$school_id]);
+                                $drafts = $stmt_drafts->fetchAll();
+
+                                if (empty($drafts)): ?>
                                     <tr>
-                                        <td colspan="5" class="text-center">هیچ گروهی یافت نشد.</td>
+                                        <td colspan="6" class="text-center">هیچ پیش‌نویس تایید شده‌ای یافت نشد.</td>
                                     </tr>
                                 <?php else: ?>
-                                    <?php foreach ($groups as $index => $group): ?>
+                                    <?php foreach ($drafts as $index => $draft): ?>
                                         <tr>
                                             <td><?php echo $index + 1; ?></td>
-                                            <td><a href="draft_list.php?group_id=<?php echo $group['id']; ?>"><?php echo htmlspecialchars($group['group_name']); ?></a></td>
-                                            <td><?php echo $group['draft_count']; ?></td>
-                                            <td><?php echo date('Y-m-d H:i:s', strtotime($group['created_at'])); ?></td>
+                                            <td><?php echo htmlspecialchars($draft['title']); ?></td>
+                                            <td><?php echo htmlspecialchars($draft['type_fa']); ?></td>
+                                            <td><?php echo htmlspecialchars(mb_substr($draft['message'], 0, 50, 'UTF-8')) . '...'; ?></td>
+                                            <td><?php echo date('Y-m-d H:i:s', strtotime($draft['created_at'])); ?></td>
                                             <td>
-                                                <a href="drafts.php?edit_group=<?php echo $group['id']; ?>" class="btn btn-sm btn-warning">ویرایش</a>
-                                                <a href="drafts.php?delete_group=<?php echo $group['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این گروه را حذف کنید؟');">حذف</a>
+                                                <a href="?edit_draft=<?php echo $draft['id']; ?>" class="btn btn-sm btn-warning">ویرایش</a>
+                                                <a href="?delete_draft=<?php echo $draft['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این پیش‌نویس را حذف کنید؟');">حذف</a>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -249,7 +344,6 @@ if (isset($_GET['edit_group'])) {
             </div>
         </section>
     </div>
-    <!-- Footer -->
     <footer class="main-footer">
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>

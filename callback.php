@@ -19,7 +19,7 @@ if (isset($_GET['Authority']) && isset($_GET['Status'])) {
     $amount = isset($_SESSION['charge_amount']) ? $_SESSION['charge_amount'] : 0;
 
     // لاگ برای دیباگ
-    file_put_contents('debug.log', "User ID: " . $_SESSION['user_id'] . ", School ID: " . $school_id . ", Amount: " . $amount . ", Status: " . $status . "\n", FILE_APPEND);
+    file_put_contents('debug.log', "User ID: " . $_SESSION['user_id'] . ", School ID: " . $school_id . ", Amount: " . $amount . ", Status: " . $status . ", Authority: " . $authority . "\n", FILE_APPEND);
 
     if ($status === 'OK') {
         // تأیید پرداخت با زرین‌پال
@@ -43,25 +43,25 @@ if (isset($_GET['Authority']) && isset($_GET['Status'])) {
             // پرداخت موفق
             $ref_id = $result['data']['ref_id'];
 
-            // آپدیت موجودی مدرسه (جدول schools)
-            $stmt = $pdo->prepare("UPDATE schools SET balance = balance + ? WHERE id = ?");
-            $success = $stmt->execute([$amount, $school_id]);
+            // ثبت تراکنش در جدول transactions
+            $stmt = $pdo->prepare("
+                INSERT INTO transactions (school_id, amount, status, payment_id, created_at, details, type)
+                VALUES (?, ?, 'successful', ?, NOW(), 'شارژ حساب', 'credit')
+            ");
+            $stmt->execute([$school_id, $amount, $ref_id]);
 
-            // لاگ برای چک کردن نتیجه آپدیت
-            file_put_contents('debug.log', "Balance Update Success: " . ($success ? 'Yes' : 'No') . "\n", FILE_APPEND);
-
-            // ثبت تراکنش در جدول payments
-            $stmt = $pdo->prepare("INSERT INTO payments (user_id, school_id, amount, authority, status, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $school_id, $amount, $authority, 'SUCCESS', date('Y-m-d H:i:s')]);
+            // ثبت تراکنش در جدول payments (نگه داشتن این بخش برای گزارش پرداخت‌ها)
+            $stmt = $pdo->prepare("INSERT INTO payments (user_id, school_id, amount, authority, ref_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $school_id, $amount, $authority, $ref_id, 'SUCCESS', date('Y-m-d H:i:s')]);
 
             // پاک کردن مبلغ از سشن
             unset($_SESSION['charge_amount']);
 
-            $success = "پرداخت با موفقیت انجام شد. موجودی مدرسه شما شارژ شد.";
+            $success = "پرداخت با موفقیت انجام شد. حساب شما شارژ شد.";
             header('Location: dashboard.php?success=' . urlencode($success));
             exit;
         } else {
-            // ثبت تراکنش ناموفق
+            // ثبت تراکنش ناموفق در جدول payments
             $stmt = $pdo->prepare("INSERT INTO payments (user_id, school_id, amount, authority, status, created_at) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'], $school_id, $amount, $authority, 'FAILED', date('Y-m-d H:i:s')]);
 
