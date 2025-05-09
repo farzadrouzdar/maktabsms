@@ -3,6 +3,9 @@ require_once 'config.php';
 require_once 'menus.php'; // اضافه کردن فایل منوها
 session_start();
 
+// تنظیم عنوان صفحه
+$page_title = "داشبورد - سامانه پیامک مدارس";
+
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -35,19 +38,10 @@ $total_sms = $stmt->fetch()['total'];
 $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM contacts WHERE school_id = ?");
 $stmt->execute([$school_id]);
 $total_contacts = $stmt->fetch()['total'];
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>داشبورد - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">

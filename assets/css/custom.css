@@ -1,17 +1,18 @@
 /* Custom styles for maktabsms project */
 body {
-    font-family: 'Vazir', sans-serif; /* Use a Persian font */
+    font-family: 'Vazir', sans-serif !important;
     direction: rtl;
     text-align: right;
 }
 
+/* بقیه استایل‌های شما بدون تغییر */
 .main-sidebar {
-    right: 0 !important; /* Move sidebar to the right edge */
+    right: 0 !important;
     left: auto !important;
-    width: 250px; /* Fixed width for sidebar */
-    transition: width 0.3s ease; /* Smooth transition for responsive design */
-    padding: 0 !important; /* Remove all padding */
-    margin: 0 !important; /* Remove all margin */
+    width: 250px;
+    transition: width 0.3s ease;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 .main-header .navbar {
@@ -20,14 +21,14 @@ body {
 }
 
 .content-wrapper {
-    margin-right: 250px !important; /* Adjust for right sidebar */
+    margin-right: 250px !important;
     margin-left: auto !important;
-    transition: margin-right 0.3s ease; /* Smooth transition for responsive design */
+    transition: margin-right 0.3s ease;
 }
 
 .login-box, .register-box {
     margin: 7% auto;
-    max-width: 400px; /* Limit max width for better mobile view */
+    max-width: 400px;
 }
 
 .card-body {
@@ -45,30 +46,30 @@ body {
 
 /* Fix for sidebar menu items */
 .nav-sidebar {
-    padding: 0 !important; /* Remove padding from nav-sidebar */
+    padding: 0 !important;
 }
 
 .nav-sidebar .nav-link {
     display: flex;
     align-items: center;
-    justify-content: flex-end; /* Align menu items to the right */
+    justify-content: flex-end;
     text-align: right;
-    padding-right: 0 !important; /* Remove padding to align with edge */
-    padding-left: 5px; /* Small padding on the left for content */
-    margin-right: 0 !important; /* Ensure no margin */
+    padding-right: 0 !important;
+    padding-left: 5px;
+    margin-right: 0 !important;
 }
 
 .nav-sidebar .nav-link p {
-    margin-right: 5px; /* Minimum margin for closer alignment */
+    margin-right: 5px;
     margin-left: 0;
     text-align: right;
     flex-grow: 1;
 }
 
 .nav-sidebar .nav-icon {
-    margin-left: 0; /* Remove margin for perfect alignment */
+    margin-left: 0;
     margin-right: 0;
-    order: -1; /* Move icon to the right */
+    order: -1;
 }
 
 /* Fix for login page alignment */
@@ -77,7 +78,7 @@ body {
 }
 
 .login-box .input-group {
-    flex-direction: row-reverse; /* Ensure input and icon are RTL */
+    flex-direction: row-reverse;
 }
 
 .login-box .input-group-text {
@@ -121,58 +122,58 @@ body {
 
 /* Logo styling */
 .brand-link img {
-    max-height: 35px; /* Optimized logo size for sidebar */
+    max-height: 35px;
     width: auto;
-    padding-right: 10px; /* Small padding for alignment */
+    padding-right: 10px;
 }
 
 .login-logo img, .register-logo img {
-    max-height: 60px; /* Optimized logo size for login/register */
+    max-height: 60px;
     width: auto;
-    margin-bottom: 10px; /* Space below logo */
+    margin-bottom: 10px;
 }
 
 /* Responsive Design */
 @media (max-width: 767px) {
     .main-sidebar {
-        width: 0; /* Hide sidebar on mobile */
+        width: 0;
         display: none;
     }
     .content-wrapper {
-        margin-right: 0 !important; /* Remove margin when sidebar is hidden */
+        margin-right: 0 !important;
     }
     .sidebar-open .main-sidebar {
-        width: 250px; /* Show sidebar when toggle is clicked */
+        width: 250px;
         display: block;
     }
     .login-box, .register-box {
-        margin: 5% auto; /* Adjust margin for mobile */
+        margin: 5% auto;
     }
     .info-box {
-        margin: 10px 0; /* Adjust spacing for mobile */
+        margin: 10px 0;
     }
     .info-box-content {
         padding-right: 10px;
     }
     .info-box-number {
-        font-size: 1.2rem; /* Smaller font on mobile */
+        font-size: 1.2rem;
     }
     .login-logo img, .register-logo img {
-        max-height: 50px; /* Smaller logo on mobile */
+        max-height: 50px;
     }
 }
 
 @media (min-width: 768px) and (max-width: 991px) {
     .main-sidebar {
-        width: 200px; /* Slightly narrower sidebar for tablets */
+        width: 200px;
     }
     .content-wrapper {
         margin-right: 200px !important;
     }
     .brand-link img {
-        max-height: 30px; /* Adjusted for tablets */
+        max-height: 30px;
     }
     .login-logo img, .register-logo img {
-        max-height: 50px; /* Adjusted for tablets */
+        max-height: 50px;
     }
 }

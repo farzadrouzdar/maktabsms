@@ -8,22 +8,33 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
 
 // گرفتن نام مرکز از ترکیب فیلدها
 $stmt = $pdo->prepare("SELECT school_type, gender_type, school_name FROM schools WHERE id = ?");
 $stmt->execute([$school_id]);
 $school = $stmt->fetch();
-$school_name = trim($school['school_type'] . ' ' . $school['gender_type'] . ' ' . $school['school_name']) ?: 'مدرسه نامشخص';
+$school_name = $school ? trim($school['school_type'] . ' ' . $school['gender_type'] . ' ' . $school['school_name']) : 'مدرسه نامشخص';
 
 // فیلترها
-$start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-30 days'));
-$end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
-$type = isset($_GET['type']) ? $_GET['type'] : 'all';
+$start_date = isset($_GET['start_date']) ? filter_var($_GET['start_date'], FILTER_SANITIZE_STRING) : date('Y-m-d', strtotime('-30 days'));
+$end_date = isset($_GET['end_date']) ? filter_var($_GET['end_date'], FILTER_SANITIZE_STRING) : date('Y-m-d');
+$type = isset($_GET['type']) ? filter_var($_GET['type'], FILTER_SANITIZE_STRING) : 'all';
 
+// جلوگیری از انتخاب تاریخ آینده برای end_date
+if (strtotime($end_date) > strtotime(date('Y-m-d'))) {
+    $end_date = date('Y-m-d');
+}
+
+// کوئری برای گرفتن تراکنش‌ها
 $query = "SELECT * FROM transactions WHERE school_id = ? AND DATE(created_at) BETWEEN ? AND ?";
 $params = [$school_id, $start_date, $end_date];
 if ($type !== 'all') {
@@ -59,20 +70,14 @@ function getTransactionDescription($transaction) {
     }
     return "تراکنش نامشخص با مبلغ " . number_format($transaction['amount']) . " تومان";
 }
+
+// تنظیم عنوان صفحه
+$page_title = "تراکنش‌ها - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تراکنش‌ها - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
@@ -130,7 +135,7 @@ function getTransactionDescription($transaction) {
                             </div>
                             <div class="col-md-3">
                                 <label for="end_date">تا تاریخ</label>
-                                <input type="date" name="end_date" id="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="form-control">
+                                <input type="date" name="end_date" id="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="form-control" max="<?php echo date('Y-m-d'); ?>">
                             </div>
                             <div class="col-md-3">
                                 <label for="type">نوع تراکنش</label>
@@ -151,30 +156,38 @@ function getTransactionDescription($transaction) {
                         <h3 class="card-title">لیست تراکنش‌ها</h3>
                     </div>
                     <div class="card-body">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>مبلغ</th>
-                                    <th>نوع</th>
-                                    <th>وضعیت</th>
-                                    <th>شماره تراکنش</th>
-                                    <th>توضیحات</th>
-                                    <th>تاریخ</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($transactions as $transaction): ?>
+                        <?php if (empty($transactions)): ?>
+                            <div class="alert alert-info">هیچ تراکنشی در بازه زمانی انتخاب‌شده یافت نشد.</div>
+                        <?php else: ?>
+                            <table class="table table-bordered table-striped">
+                                <thead>
                                     <tr>
-                                        <td><?php echo number_format($transaction['amount']); ?> <?php echo $transaction['type'] === 'credit' ? 'تومان' : ''; ?></td>
-                                        <td><?php echo $transaction['type'] === 'credit' ? 'شارژ' : 'ارسال پیامک'; ?></td>
-                                        <td><?php echo $transaction['status'] === 'successful' ? 'موفق' : ($transaction['status'] === 'failed' ? 'ناموفق' : 'لغو شده'); ?></td>
-                                        <td><?php echo $transaction['payment_id'] ?? 'ندارد'; ?></td>
-                                        <td><?php echo htmlspecialchars(getTransactionDescription($transaction)); ?></td>
-                                        <td><?php echo $transaction['created_at']; ?></td>
+                                        <th>مبلغ</th>
+                                        <th>نوع</th>
+                                        <th>وضعیت</th>
+                                        <th>شماره تراکنش</th>
+                                        <th>توضیحات</th>
+                                        <th>تاریخ</th>
                                     </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($transactions as $transaction): ?>
+                                        <tr>
+                                            <td><?php echo number_format($transaction['amount']); ?> <?php echo $transaction['type'] === 'credit' ? 'تومان' : ''; ?></td>
+                                            <td><?php echo $transaction['type'] === 'credit' ? 'شارژ' : 'ارسال پیامک'; ?></td>
+                                            <td>
+                                                <span class="badge <?php echo $transaction['status'] === 'successful' ? 'badge-success' : ($transaction['status'] === 'failed' ? 'badge-danger' : 'badge-warning'); ?>">
+                                                    <?php echo $transaction['status'] === 'successful' ? 'موفق' : ($transaction['status'] === 'failed' ? 'ناموفق' : 'لغو شده'); ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($transaction['payment_id'] ?? 'ندارد'); ?></td>
+                                            <td><?php echo htmlspecialchars(getTransactionDescription($transaction)); ?></td>
+                                            <td><?php echo date('Y-m-d H:i', strtotime($transaction['created_at'])); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -184,8 +197,9 @@ function getTransactionDescription($transaction) {
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
 </body>
 </html>
