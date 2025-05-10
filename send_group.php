@@ -8,12 +8,23 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
 
-// Function to get current balance from transactions
+// گرفتن نام مرکز از ترکیب فیلدها
+$stmt = $pdo->prepare("SELECT school_type, gender_type, school_name FROM schools WHERE id = ?");
+$stmt->execute([$school_id]);
+$school = $stmt->fetch();
+$school_name = $school ? trim($school['school_type'] . ' ' . $school['gender_type'] . ' ' . $school['school_name']) : 'مدرسه نامشخص';
+
+// تابع برای محاسبه موجودی
 function get_balance($pdo, $school_id) {
     $stmt = $pdo->prepare("
         SELECT
@@ -26,11 +37,31 @@ function get_balance($pdo, $school_id) {
     return $stmt->fetch()['balance'] ?? 0;
 }
 
-// Function to calculate SMS cost based on recipient count (assuming SMS_COST_PER_PART is in Tomans)
-function calculate_sms_cost($recipient_count) {
-    $cost_per_sms = SMS_COST_PER_PART; // Cost per SMS in Tomans
-    return $recipient_count * $cost_per_sms;
+// تابع برای محاسبه هزینه پیامک (هماهنگ با ارسال تکی)
+function calculate_sms_cost($message, $school_name) {
+    $full_message = $school_name . "\n" . $message . "\n" . SMS_FOOTER_TEXT;
+    $message_length = mb_strlen($full_message, 'UTF-8');
+    $sms_parts = 1;
+    if ($message_length > SMS_MAX_CHARS_PART1) {
+        $remaining_chars = $message_length - SMS_MAX_CHARS_PART1;
+        $sms_parts += ceil($remaining_chars / SMS_MAX_CHARS_OTHER);
+    }
+    return $sms_parts * SMS_COST_PER_PART;
 }
+
+// تابع برای محاسبه هزینه گروهی
+function calculate_group_sms_cost($message, $school_name, $recipient_count) {
+    $cost_per_sms = calculate_sms_cost($message, $school_name);
+    return $cost_per_sms * $recipient_count;
+}
+
+// مقداردهی اولیه متغیرها
+$error = '';
+$success = '';
+$balance = get_balance($pdo, $school_id);
+
+// دیباگ: لاگ موجودی اولیه
+file_put_contents('debug.log', "Initial Balance for school_id $school_id: $balance\n", FILE_APPEND);
 
 // Handle sending group message
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_group_message'])) {
@@ -39,10 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_group_message'])
     $message = filter_var($_POST['message'], FILTER_SANITIZE_STRING);
 
     if (!empty($group_id) && !empty($message)) {
-        // Add footer text to the message
-        $message .= ' ' . SMS_FOOTER_TEXT;
+        // اضافه کردن هدر و فوتر به پیام
+        $full_message = $school_name . "\n" . $message . "\n" . SMS_FOOTER_TEXT;
 
-        // Fetch all contacts in the selected group
+        // گرفتن تمام مخاطبین گروه
         $stmt = $pdo->prepare("SELECT mobile FROM contacts WHERE school_id = ? AND group_id = ?");
         $stmt->execute([$school_id, $group_id]);
         $contacts = $stmt->fetchAll();
@@ -51,50 +82,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_group_message'])
             $error = "هیچ مخاطبی در این گروه یافت نشد.";
         } else {
             $recipient_count = count($contacts);
-            $sms_cost = calculate_sms_cost($recipient_count);
+            $sms_cost = calculate_group_sms_cost($message, $school_name, $recipient_count);
             $current_balance = get_balance($pdo, $school_id);
+
+            // دیباگ: لاگ هزینه و موجودی
+            file_put_contents('debug.log', "SMS Cost: $sms_cost, Current Balance: $current_balance\n", FILE_APPEND);
 
             if ($current_balance >= $sms_cost) {
                 $mobiles = [];
+                $invalid_mobiles = [];
                 foreach ($contacts as $contact) {
-                    $mobiles[] = $contact['mobile'];
-                }
-                $to_list = implode(',', $mobiles);
-
-                // Prepare URL with parameters for Sabanovin API
-                $url = SABANOVIN_BASE_URL . '/sms/send.json?gateway=' . urlencode(SABANOVIN_GATEWAY) . '&to=' . urlencode($to_list) . '&text=' . urlencode($message);
-
-                // Send request to Sabanovin API
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_HTTPGET, true);
-
-                $response = curl_exec($ch);
-                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                // Check API response
-                if ($http_code == 200) {
-                    $response_data = json_decode($response, true);
-                    if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
-                        $success_count = $recipient_count;
-                        $success = "پیامک به $success_count مخاطب با موفقیت ارسال شد (Batch ID: " . $response_data['batch_id'] . ").";
-
-                        // Record transaction
-                        $details = json_encode(['batch_id' => $response_data['batch_id'] ?? null, 'count' => $recipient_count]);
-                        $stmt = $pdo->prepare("
-                            INSERT INTO transactions (school_id, amount, status, payment_id, created_at, details, type)
-                            VALUES (?, ?, 'successful', ?, NOW(), ?, 'debit')
-                        ");
-                        $stmt->execute([$school_id, $sms_cost, $response_data['batch_id'] ?? null, $details]);
-
+                    $mobile = $contact['mobile'];
+                    // اعتبارسنجی شماره موبایل
+                    if (preg_match('/^09[0-9]{9}$/', $mobile)) {
+                        $mobiles[] = $mobile;
                     } else {
-                        $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
-                        file_put_contents('sms_errors.log', "Failed batch: " . $response . "\n", FILE_APPEND);
+                        $invalid_mobiles[] = $mobile;
                     }
+                }
+
+                if (empty($mobiles)) {
+                    $error = "هیچ شماره موبایل معتبری در این گروه یافت نشد.";
                 } else {
-                    $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
-                    file_put_contents('sms_errors.log', "HTTP Error $http_code for group $group_id\n", FILE_APPEND);
+                    $to_list = implode(',', $mobiles);
+
+                    // ثبت ارسال گروهی در جدول group_sms
+                    try {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO group_sms (school_id, group_id, draft_id, message, mobile_list, status, created_at)
+                            VALUES (?, ?, ?, ?, ?, 'pending', NOW())
+                        ");
+                        $stmt->execute([$school_id, $group_id, $draft_id ?: null, $full_message, json_encode($mobiles)]);
+                        $group_sms_id = $pdo->lastInsertId();
+                    } catch (PDOException $e) {
+                        $error = "خطا در ثبت ارسال گروهی: " . $e->getMessage();
+                        file_put_contents('debug.log', "Error inserting into group_sms: " . $e->getMessage() . "\n", FILE_APPEND);
+                    }
+
+                    if (empty($error)) {
+                        // ارسال درخواست به API صبانوین
+                        $url = SABANOVIN_BASE_URL . '/sms/send.json?gateway=' . urlencode(SABANOVIN_GATEWAY) . '&to=' . urlencode($to_list) . '&text=' . urlencode($full_message);
+
+                        $ch = curl_init($url);
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                        curl_setopt($ch, CURLOPT_HTTPGET, true);
+                        $response = curl_exec($ch);
+                        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        curl_close($ch);
+
+                        // دیباگ: لاگ پاسخ API
+                        file_put_contents('debug.log', "API Response: $response, HTTP Code: $http_code\n", FILE_APPEND);
+
+                        if ($http_code == 200) {
+                            $response_data = json_decode($response, true);
+                            if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
+                                $batch_id = $response_data['batch_id'] ?? null;
+                                $success_count = count($mobiles);
+                                $success = "پیامک به $success_count مخاطب با موفقیت ارسال شد (Batch ID: " . ($batch_id ?? 'ندارد') . ").";
+
+                                // ثبت تراکنش (هماهنگ با ارسال تکی)
+                                $details = "ارسال گروهی به گروه $group_id (تعداد: $success_count, Batch ID: " . ($batch_id ?? 'ندارد') . ")";
+                                try {
+                                    $stmt = $pdo->prepare("
+                                        INSERT INTO transactions (school_id, amount, status, created_at, details, type)
+                                        VALUES (?, ?, 'successful', NOW(), ?, 'debit')
+                                    ");
+                                    $stmt->execute([$school_id, $sms_cost, $details]);
+                                    file_put_contents('debug.log', "Transaction inserted successfully: $details\n", FILE_APPEND);
+                                } catch (PDOException $e) {
+                                    $error = "خطا در ثبت تراکنش: " . $e->getMessage();
+                                    file_put_contents('debug.log', "Error inserting transaction: " . $e->getMessage() . "\n", FILE_APPEND);
+                                }
+
+                                // به‌روزرسانی وضعیت در جدول group_sms
+                                try {
+                                    $stmt = $pdo->prepare("
+                                        UPDATE group_sms
+                                        SET status = 'sent', batch_id = ?, sent_at = NOW(), updated_at = NOW()
+                                        WHERE id = ?
+                                    ");
+                                    $stmt->execute([$batch_id, $group_sms_id]);
+                                } catch (PDOException $e) {
+                                    $error = "خطا در به‌روزرسانی وضعیت ارسال گروهی: " . $e->getMessage();
+                                    file_put_contents('debug.log', "Error updating group_sms: " . $e->getMessage() . "\n", FILE_APPEND);
+                                }
+                            } else {
+                                $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
+                                file_put_contents('sms_errors.log', "Failed batch: " . $response . "\n", FILE_APPEND);
+
+                                $stmt = $pdo->prepare("UPDATE group_sms SET status = 'failed', error_message = ?, updated_at = NOW() WHERE id = ?");
+                                $stmt->execute([$error, $group_sms_id]);
+                            }
+                        } else {
+                            $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
+                            file_put_contents('sms_errors.log', "HTTP Error $http_code for group $group_id\n", FILE_APPEND);
+
+                            $stmt = $pdo->prepare("UPDATE group_sms SET status = 'failed', error_message = ?, updated_at = NOW() WHERE id = ?");
+                            $stmt->execute([$error, $group_sms_id]);
+                        }
+
+                        // گزارش شماره‌های نامعتبر
+                        if (!empty($invalid_mobiles)) {
+                            $error .= " شماره‌های نامعتبر (ارسال نشدند): " . implode(', ', $invalid_mobiles);
+                        }
+                    }
                 }
             } else {
                 $error = "موجودی حساب کافی نیست. هزینه ارسال: " . number_format($sms_cost) . " تومان، موجودی فعلی: " . number_format($current_balance) . " تومان.";
@@ -105,28 +196,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_group_message'])
     }
 }
 
-// Fetch all contact groups
-$stmt = $pdo->prepare("SELECT * FROM contact_groups WHERE school_id = ? ORDER BY created_at DESC");
+// دیباگ: لاگ موجودی نهایی
+$final_balance = get_balance($pdo, $school_id);
+file_put_contents('debug.log', "Final Balance for school_id $school_id: $final_balance\n", FILE_APPEND);
+
+// گرفتن تمام گروه‌های مخاطبین
+$stmt = $pdo->prepare("SELECT cg.*, COUNT(c.id) as contact_count FROM contact_groups cg LEFT JOIN contacts c ON cg.id = c.group_id WHERE cg.school_id = ? GROUP BY cg.id ORDER BY cg.created_at DESC");
 $stmt->execute([$school_id]);
 $groups = $stmt->fetchAll();
 
-// Fetch approved simple drafts
+// گرفتن پیش‌نویس‌های ساده تأییدشده
 $stmt = $pdo->prepare("SELECT * FROM drafts WHERE school_id = ? AND status = 'approved' AND type = 'simple' ORDER BY created_at DESC");
 $stmt->execute([$school_id]);
 $approved_drafts = $stmt->fetchAll();
+
+// تنظیم عنوان صفحه
+$page_title = "ارسال پیامک گروهی - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ارسال پیامک گروهی - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
+
 <div class="wrapper">
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
@@ -172,47 +262,69 @@ $approved_drafts = $stmt->fetchAll();
         </section>
         <section class="content">
             <div class="container-fluid">
-                <?php if (isset($success)): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
-                <?php endif; ?>
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
-                <?php endif; ?>
+                <p>موجودی فعلی: <?php echo number_format($balance); ?> تومان</p>
+                <div id="message-container">
+                    <?php if (!empty($success)): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($error)): ?>
+                        <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endif; ?>
+                </div>
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">ارسال پیامک به گروهی از مخاطبین</h3>
                     </div>
                     <div class="card-body">
-                        <form method="POST">
-                            <div class="form-group">
-                                <label for="group_id">انتخاب گروه</label>
-                                <select class="form-control" name="group_id" required>
-                                    <option value="">-- گروه را انتخاب کنید --</option>
-                                    <?php foreach ($groups as $group): ?>
-                                        <option value="<?php echo $group['id']; ?>">
-                                            <?php echo htmlspecialchars($group['group_name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="draft_id">انتخاب پیش‌نویس (فقط ساده)</label>
-                                <select class="form-control" name="draft_id" id="draft_id">
-                                    <option value="">-- بدون پیش‌نویس --</option>
-                                    <?php foreach ($approved_drafts as $draft): ?>
-                                        <option value="<?php echo $draft['id']; ?>">
-                                            <?php echo htmlspecialchars($draft['title']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="message">متن پیام</label>
-                                <textarea class="form-control" name="message" id="message" rows="3" required></textarea>
-                                <small class="form-text text-muted">اگه پیش‌نویس انتخاب کنی، متن به‌صورت خودکار پر می‌شه.</small>
-                            </div>
-                            <button type="submit" name="send_group_message" class="btn btn-primary">ارسال پیامک گروهی</button>
-                        </form>
+                        <?php if (empty($groups)): ?>
+                            <div class="alert alert-info">هیچ گروهی یافت نشد. لطفاً ابتدا یک گروه ایجاد کنید.</div>
+                        <?php else: ?>
+                            <form method="POST" id="group-sms-form">
+                                <div class="form-group">
+                                    <label for="group_id">انتخاب گروه</label>
+                                    <select class="form-control" name="group_id" id="group_id" required>
+                                        <option value="">-- گروه را انتخاب کنید --</option>
+                                        <?php foreach ($groups as $group): ?>
+                                            <option value="<?php echo $group['id']; ?>" data-contact-count="<?php echo $group['contact_count']; ?>">
+                                                <?php echo htmlspecialchars($group['group_name']); ?> (<?php echo $group['contact_count']; ?> مخاطب)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <small class="form-text text-muted">تعداد مخاطبین گروه انتخاب‌شده نمایش داده می‌شود.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="draft_id">انتخاب پیش‌نویس (فقط ساده)</label>
+                                    <select class="form-control" name="draft_id" id="draft_id">
+                                        <option value="">-- بدون پیش‌نویس --</option>
+                                        <?php foreach ($approved_drafts as $draft): ?>
+                                            <option value="<?php echo $draft['id']; ?>">
+                                                <?php echo htmlspecialchars($draft['title']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="message">متن پیام</label>
+                                    <div class="message-header">
+                                        <i class="fas fa-lock lock-icon"></i>
+                                        <span class="text"><?php echo htmlspecialchars($school_name); ?></span>
+                                    </div>
+                                    <textarea class="form-control message-input" name="message" id="message" rows="5" required data-header="<?php echo htmlspecialchars($school_name); ?>" data-footer="<?php echo htmlspecialchars(SMS_FOOTER_TEXT); ?>"></textarea>
+                                    <div class="message-footer">
+                                        <i class="fas fa-lock lock-icon"></i>
+                                        <span class="text"><?php echo htmlspecialchars(SMS_FOOTER_TEXT); ?></span>
+                                    </div>
+                                    <small class="form-text text-muted">هدر و فوتر به‌صورت خودکار به متن شما اضافه می‌شوند و بخشی از متن نهایی خواهند بود.</small>
+                                    <div class="mt-2">
+                                        <span id="char_count" class="counter-animated">0</span> کاراکتر | 
+                                        <span id="sms_parts" class="counter-animated">1</span> پیامک | 
+                                        هزینه تخمینی برای هر پیامک: <span id="cost_estimate" class="counter-animated">0</span> تومان | 
+                                        کل هزینه (برای <span id="recipient_count">0</span> مخاطب): <span id="total_cost" class="counter-animated">0</span> تومان
+                                    </div>
+                                </div>
+                                <button type="submit" name="send_group_message" class="btn btn-primary">ارسال پیامک گروهی</button>
+                            </form>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -222,12 +334,53 @@ $approved_drafts = $stmt->fetchAll();
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
 <script>
     $(document).ready(function() {
-        $('#draft_id').change(function() {
+        // محو شدن پیام‌های موفقیت و خطا بعد از 5 ثانیه
+        setTimeout(function() {
+            $('#message-container .alert').fadeOut('slow');
+        }, 5000);
+
+        // تابع برای به‌روزرسانی تعداد کاراکترها، بخش‌ها و هزینه
+        function updateMessageStats() {
+            var textarea = $('#message');
+            var userText = textarea.val() || '';
+            var header = textarea.data('header') || '';
+            var footer = textarea.data('footer') || '';
+            var fullMessage = header + "\n" + userText + "\n" + footer;
+            var char_count = fullMessage.length;
+            var sms_parts = 1;
+            if (char_count > <?php echo SMS_MAX_CHARS_PART1; ?>) {
+                var remaining_chars = char_count - <?php echo SMS_MAX_CHARS_PART1; ?>;
+                sms_parts += Math.ceil(remaining_chars / <?php echo SMS_MAX_CHARS_OTHER; ?>);
+            }
+            var cost_per_sms = sms_parts * <?php echo SMS_COST_PER_PART; ?>;
+            var recipient_count = parseInt($('#group_id option:selected').data('contact-count') || 0);
+            var total_cost = cost_per_sms * recipient_count;
+
+            $('#char_count').text(char_count);
+            $('#sms_parts').text(sms_parts);
+            $('#cost_estimate').text(cost_per_sms.toFixed(2));
+            $('#recipient_count').text(recipient_count);
+            $('#total_cost').text(total_cost.toFixed(2));
+
+            // انیمیشن برای تغییرات
+            $('#char_count, #sms_parts, #cost_estimate, #recipient_count, #total_cost').addClass('counter-blink');
+        }
+
+        // به‌روزرسانی تعداد کاراکترها و هزینه هنگام تایپ
+        $('#message').on('input', updateMessageStats);
+
+        // به‌روزرسانی تعداد مخاطبین و هزینه هنگام تغییر گروه
+        $('#group_id').on('change', function() {
+            updateMessageStats();
+        });
+
+        // بارگذاری پیش‌نویس
+        $('#draft_id').on('change', function() {
             var draft_id = $(this).val();
             if (draft_id) {
                 $.ajax({
@@ -236,13 +389,43 @@ $approved_drafts = $stmt->fetchAll();
                     data: { draft_id: draft_id },
                     success: function(response) {
                         $('#message').val(response);
+                        updateMessageStats();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error fetching draft:', error);
+                        $('#message-container').html('<div class="alert alert-danger">خطا در بارگذاری پیش‌نویس</div>');
                     }
                 });
             } else {
                 $('#message').val('');
+                updateMessageStats();
             }
         });
+
+        // مقدار اولیه هنگام لود صفحه
+        updateMessageStats();
     });
 </script>
+<style>
+    .counter-blink {
+        animation: blink 0.5s ease-in-out;
+    }
+    @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    .message-header, .message-footer {
+        background-color: #f8f9fa;
+        padding: 5px 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        margin-bottom: 5px;
+    }
+    .lock-icon {
+        color: #6c757d;
+        margin-left: 5px;
+    }
+</style>
 </body>
 </html>

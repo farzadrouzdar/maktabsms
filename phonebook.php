@@ -8,9 +8,14 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
 
 // Handle adding a new group
@@ -20,6 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_group'])) {
         $stmt = $pdo->prepare("INSERT INTO contact_groups (school_id, group_name) VALUES (?, ?)");
         $stmt->execute([$school_id, $group_name]);
         $success = "گروه با موفقیت اضافه شد.";
+        header('Location: phonebook.php');
+        exit;
     } else {
         $error = "نام گروه نمی‌تواند خالی باشد.";
     }
@@ -36,10 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_contact'])) {
     $field3 = filter_var($_POST['field3'], FILTER_SANITIZE_STRING);
     $field4 = filter_var($_POST['field4'], FILTER_SANITIZE_STRING);
 
-    if (!empty($group_id) && !empty($mobile)) {
+    // اعتبارسنجی ساده شماره موبایل
+    if (!preg_match('/^09[0-9]{9}$/', $mobile)) {
+        $error = "شماره موبایل باید با 09 شروع شود و 11 رقم باشد.";
+    } elseif (!empty($group_id)) {
         $stmt = $pdo->prepare("INSERT INTO contacts (school_id, group_id, name, mobile, birth_date, field1, field2, field3, field4) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$school_id, $group_id, $name, $mobile, $birth_date, $field1, $field2, $field3, $field4]);
         $success = "مخاطب با موفقیت اضافه شد.";
+        header('Location: phonebook.php?group=' . $group_id);
+        exit;
     } else {
         $error = "شماره موبایل و گروه نمی‌توانند خالی باشند.";
     }
@@ -57,10 +69,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_contact'])) {
     $field3 = filter_var($_POST['field3'], FILTER_SANITIZE_STRING);
     $field4 = filter_var($_POST['field4'], FILTER_SANITIZE_STRING);
 
-    if (!empty($contact_id) && !empty($group_id) && !empty($mobile)) {
+    // اعتبارسنجی ساده شماره موبایل
+    if (!preg_match('/^09[0-9]{9}$/', $mobile)) {
+        $error = "شماره موبایل باید با 09 شروع شود و 11 رقم باشد.";
+    } elseif (!empty($contact_id) && !empty($group_id)) {
         $stmt = $pdo->prepare("UPDATE contacts SET group_id = ?, name = ?, mobile = ?, birth_date = ?, field1 = ?, field2 = ?, field3 = ?, field4 = ? WHERE id = ? AND school_id = ?");
         $stmt->execute([$group_id, $name, $mobile, $birth_date, $field1, $field2, $field3, $field4, $contact_id, $school_id]);
         $success = "مخاطب با موفقیت ویرایش شد.";
+        header('Location: phonebook.php?group=' . $group_id);
+        exit;
     } else {
         $error = "شماره موبایل و گروه نمی‌توانند خالی باشند.";
     }
@@ -80,10 +97,11 @@ if (isset($_GET['delete_group'])) {
 
 if (isset($_GET['delete_contact'])) {
     $contact_id = filter_var($_GET['delete_contact'], FILTER_SANITIZE_NUMBER_INT);
+    $group_id = filter_var($_GET['group'], FILTER_SANITIZE_NUMBER_INT);
     $stmt = $pdo->prepare("DELETE FROM contacts WHERE id = ? AND school_id = ?");
     $stmt->execute([$contact_id, $school_id]);
     $success = "مخاطب با موفقیت حذف شد.";
-    header('Location: phonebook.php?group=' . $_GET['group']);
+    header('Location: phonebook.php?group=' . $group_id);
     exit;
 }
 
@@ -98,6 +116,14 @@ $search_query = isset($_GET['search']) ? filter_var($_GET['search'], FILTER_SANI
 
 $contacts = [];
 if ($selected_group) {
+    // چک کردن وجود گروه
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM contact_groups WHERE id = ? AND school_id = ?");
+    $stmt->execute([$selected_group, $school_id]);
+    if ($stmt->fetchColumn() == 0) {
+        header('Location: phonebook.php');
+        exit;
+    }
+
     $query = "SELECT c.*, cg.group_name FROM contacts c JOIN contact_groups cg ON c.group_id = cg.id WHERE c.school_id = ? AND c.group_id = ?";
     $params = [$school_id, $selected_group];
     if (!empty($search_query)) {
@@ -110,20 +136,14 @@ if ($selected_group) {
     $stmt->execute($params);
     $contacts = $stmt->fetchAll();
 }
+
+// تنظیم عنوان صفحه
+$page_title = "دفترچه تلفن - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>دفترچه تلفن - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
@@ -139,7 +159,7 @@ if ($selected_group) {
         </ul>
     </nav>
     <!-- Main Sidebar -->
-        <aside class="main-sidebar sidebar-dark-primary elevation-4">
+    <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
             <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
         </a>
@@ -172,12 +192,14 @@ if ($selected_group) {
         </section>
         <section class="content">
             <div class="container-fluid">
-                <?php if (isset($success)): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
-                <?php endif; ?>
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
-                <?php endif; ?>
+                <div id="message-container">
+                    <?php if (isset($success)): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                    <?php endif; ?>
+                    <?php if (isset($error)): ?>
+                        <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endif; ?>
+                </div>
                 <!-- Add Group Form -->
                 <div class="card">
                     <div class="card-header">
@@ -199,50 +221,54 @@ if ($selected_group) {
                         <h3 class="card-title">لیست گروه‌ها</h3>
                     </div>
                     <div class="card-body">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>نام گروه</th>
-                                    <th>تعداد مخاطبین</th>
-                                    <th>عملیات</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($groups as $group): ?>
+                        <?php if (empty($groups)): ?>
+                            <div class="alert alert-info">هیچ گروهی یافت نشد.</div>
+                        <?php else: ?>
+                            <table class="table table-bordered table-striped">
+                                <thead>
                                     <tr>
-                                        <td><a href="?group=<?php echo $group['id']; ?>"><?php echo htmlspecialchars($group['group_name']); ?></a></td>
-                                        <td><?php echo $group['contact_count']; ?></td>
-                                        <td>
-                                            <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#editGroupModal<?php echo $group['id']; ?>">ویرایش</button>
-                                            <a href="phonebook.php?delete_group=<?php echo $group['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این گروه و مخاطبین آن را حذف کنید؟');">حذف</a>
-                                        </td>
+                                        <th>نام گروه</th>
+                                        <th>تعداد مخاطبین</th>
+                                        <th>عملیات</th>
                                     </tr>
-                                    <!-- Edit Group Modal -->
-                                    <div class="modal fade" id="editGroupModal<?php echo $group['id']; ?>" tabindex="-1" role="dialog" aria-labelledby="editGroupModalLabel" aria-hidden="true">
-                                        <div class="modal-dialog" role="document">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title" id="editGroupModalLabel">ویرایش گروه</h5>
-                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                        <span aria-hidden="true">×</span>
-                                                    </button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <form method="POST">
-                                                        <input type="hidden" name="group_id" value="<?php echo $group['id']; ?>">
-                                                        <div class="form-group">
-                                                            <label for="group_name">نام گروه</label>
-                                                            <input type="text" class="form-control" name="group_name" value="<?php echo htmlspecialchars($group['group_name']); ?>" required>
-                                                        </div>
-                                                        <button type="submit" name="edit_group" class="btn btn-primary">ذخیره تغییرات</button>
-                                                    </form>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($groups as $group): ?>
+                                        <tr>
+                                            <td><a href="?group=<?php echo $group['id']; ?>"><?php echo htmlspecialchars($group['group_name']); ?></a></td>
+                                            <td><?php echo $group['contact_count']; ?></td>
+                                            <td>
+                                                <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#editGroupModal<?php echo $group['id']; ?>">ویرایش</button>
+                                                <a href="phonebook.php?delete_group=<?php echo $group['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این گروه و مخاطبین آن را حذف کنید؟');">حذف</a>
+                                            </td>
+                                        </tr>
+                                        <!-- Edit Group Modal -->
+                                        <div class="modal fade" id="editGroupModal<?php echo $group['id']; ?>" tabindex="-1" role="dialog" aria-labelledby="editGroupModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog" role="document">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="editGroupModalLabel">ویرایش گروه</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <form method="POST">
+                                                            <input type="hidden" name="group_id" value="<?php echo $group['id']; ?>">
+                                                            <div class="form-group">
+                                                                <label for="group_name">نام گروه</label>
+                                                                <input type="text" class="form-control" name="group_name" value="<?php echo htmlspecialchars($group['group_name']); ?>" required>
+                                                            </div>
+                                                            <button type="submit" name="edit_group" class="btn btn-primary">ذخیره تغییرات</button>
+                                                        </form>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <!-- Contacts List (if group selected) -->
@@ -278,7 +304,7 @@ if ($selected_group) {
                                     <div class="col-md-4">
                                         <div class="form-group">
                                             <label for="mobile">شماره موبایل</label>
-                                            <input type="text" class="form-control" name="mobile" required>
+                                            <input type="text" class="form-control" name="mobile" required placeholder="09xxxxxxxxx">
                                         </div>
                                     </div>
                                 </div>
@@ -322,85 +348,89 @@ if ($selected_group) {
                                     </div>
                                 </div>
                             </form>
-                            <table class="table table-bordered mt-3">
-                                <thead>
-                                    <tr>
-                                        <th>نام</th>
-                                        <th>شماره موبایل</th>
-                                        <th>تاریخ تولد</th>
-                                        <th>فیلد ۱</th>
-                                        <th>فیلد ۲</th>
-                                        <th>فیلد ۳</th>
-                                        <th>فیلد ۴</th>
-                                        <th>عملیات</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($contacts as $contact): ?>
+                            <?php if (empty($contacts)): ?>
+                                <div class="alert alert-info mt-3">هیچ مخاطبی یافت نشد.</div>
+                            <?php else: ?>
+                                <table class="table table-bordered table-striped mt-3">
+                                    <thead>
                                         <tr>
-                                            <td><?php echo htmlspecialchars($contact['name']); ?></td>
-                                            <td><?php echo htmlspecialchars($contact['mobile']); ?></td>
-                                            <td><?php echo htmlspecialchars($contact['birth_date']); ?></td>
-                                            <td><?php echo htmlspecialchars($contact['field1']); ?></td>
-                                            <td><?php echo htmlspecialchars($contact['field2']); ?></td>
-                                            <td><?php echo htmlspecialchars($contact['field3']); ?></td>
-                                            <td><?php echo htmlspecialchars($contact['field4']); ?></td>
-                                            <td>
-                                                <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#editModal<?php echo $contact['id']; ?>">ویرایش</button>
-                                                <a href="phonebook.php?delete_contact=<?php echo $contact['id']; ?>&group=<?php echo $selected_group; ?>" class="btn btn-danger btn-sm" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این مخاطب را حذف کنید؟');">حذف</a>
-                                            </td>
+                                            <th>نام</th>
+                                            <th>شماره موبایل</th>
+                                            <th>تاریخ تولد</th>
+                                            <th>فیلد ۱</th>
+                                            <th>فیلد ۲</th>
+                                            <th>فیلد ۳</th>
+                                            <th>فیلد ۴</th>
+                                            <th>عملیات</th>
                                         </tr>
-                                        <!-- Edit Modal -->
-                                        <div class="modal fade" id="editModal<?php echo $contact['id']; ?>" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
-                                            <div class="modal-dialog" role="document">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title" id="editModalLabel">ویرایش مخاطب</h5>
-                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                            <span aria-hidden="true">×</span>
-                                                        </button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <form method="POST">
-                                                            <input type="hidden" name="contact_id" value="<?php echo $contact['id']; ?>">
-                                                            <input type="hidden" name="group_id" value="<?php echo $contact['group_id']; ?>">
-                                                            <div class="form-group">
-                                                                <label for="name">نام</label>
-                                                                <input type="text" class="form-control" name="name" value="<?php echo htmlspecialchars($contact['name']); ?>">
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label for="mobile">شماره موبایل</label>
-                                                                <input type="text" class="form-control" name="mobile" value="<?php echo htmlspecialchars($contact['mobile']); ?>" required>
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label for="birth_date">تاریخ تولد</label>
-                                                                <input type="date" class="form-control" name="birth_date" value="<?php echo htmlspecialchars($contact['birth_date']); ?>">
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label for="field1">فیلد ۱</label>
-                                                                <input type="text" class="form-control" name="field1" value="<?php echo htmlspecialchars($contact['field1']); ?>">
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label for="field2">فیلد ۲</label>
-                                                                <input type="text" class="form-control" name="field2" value="<?php echo htmlspecialchars($contact['field2']); ?>">
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label for="field3">فیلد ۳</label>
-                                                                <input type="text" class="form-control" name="field3" value="<?php echo htmlspecialchars($contact['field3']); ?>">
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label for="field4">فیلد ۴</label>
-                                                                <input type="text" class="form-control" name="field4" value="<?php echo htmlspecialchars($contact['field4']); ?>">
-                                                            </div>
-                                                            <button type="submit" name="edit_contact" class="btn btn-primary">ذخیره تغییرات</button>
-                                                        </form>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($contacts as $contact): ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($contact['name']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['mobile']); ?></td>
+                                                <td><?php echo htmlspecialchars($contact['birth_date']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['field1']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['field2']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['field3']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['field4']) ?: '-'; ?></td>
+                                                <td>
+                                                    <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#editModal<?php echo $contact['id']; ?>">ویرایش</button>
+                                                    <a href="phonebook.php?delete_contact=<?php echo $contact['id']; ?>&group=<?php echo $selected_group; ?>" class="btn btn-danger btn-sm" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این مخاطب را حذف کنید؟');">حذف</a>
+                                                </td>
+                                            </tr>
+                                            <!-- Edit Modal -->
+                                            <div class="modal fade" id="editModal<?php echo $contact['id']; ?>" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+                                                <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title" id="editModalLabel">ویرایش مخاطب</h5>
+                                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                                <span aria-hidden="true">&times;</span>
+                                                            </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <form method="POST">
+                                                                <input type="hidden" name="contact_id" value="<?php echo $contact['id']; ?>">
+                                                                <input type="hidden" name="group_id" value="<?php echo $contact['group_id']; ?>">
+                                                                <div class="form-group">
+                                                                    <label for="name">نام</label>
+                                                                    <input type="text" class="form-control" name="name" value="<?php echo htmlspecialchars($contact['name']); ?>">
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <label for="mobile">شماره موبایل</label>
+                                                                    <input type="text" class="form-control" name="mobile" value="<?php echo htmlspecialchars($contact['mobile']); ?>" required placeholder="09xxxxxxxxx">
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <label for="birth_date">تاریخ تولد</label>
+                                                                    <input type="date" class="form-control" name="birth_date" value="<?php echo htmlspecialchars($contact['birth_date']); ?>">
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <label for="field1">فیلد ۱</label>
+                                                                    <input type="text" class="form-control" name="field1" value="<?php echo htmlspecialchars($contact['field1']); ?>">
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <label for="field2">فیلد ۲</label>
+                                                                    <input type="text" class="form-control" name="field2" value="<?php echo htmlspecialchars($contact['field2']); ?>">
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <label for="field3">فیلد ۳</label>
+                                                                    <input type="text" class="form-control" name="field3" value="<?php echo htmlspecialchars($contact['field3']); ?>">
+                                                                </div>
+                                                                <div class="form-group">
+                                                                    <label for="field4">فیلد ۴</label>
+                                                                    <input type="text" class="form-control" name="field4" value="<?php echo htmlspecialchars($contact['field4']); ?>">
+                                                                </div>
+                                                                <button type="submit" name="edit_contact" class="btn btn-primary">ذخیره تغییرات</button>
+                                                            </form>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -412,8 +442,16 @@ if ($selected_group) {
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // محو شدن پیام‌های موفقیت و خطا بعد از 5 ثانیه
+        setTimeout(function() {
+            $('#message-container .alert').fadeOut('slow');
+        }, 5000);
+    });
+</script>
 </body>
 </html>

@@ -8,10 +8,21 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
+
+// گرفتن نام مرکز از ترکیب فیلدها
+$stmt = $pdo->prepare("SELECT school_type, gender_type, school_name FROM schools WHERE id = ?");
+$stmt->execute([$school_id]);
+$school = $stmt->fetch();
+$school_name = $school ? trim($school['school_type'] . ' ' . $school['gender_type'] . ' ' . $school['school_name']) : 'مدرسه نامشخص';
 
 // ساخت لینک API با استفاده از مقادیر کانفیگ
 $api_url = SABANOVIN_BASE_URL . '/sms/receive.json?gateway=' . SABANOVIN_GATEWAY . '&is_read=0';
@@ -22,34 +33,45 @@ curl_setopt($ch, CURLOPT_URL, $api_url);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // فقط برای تست، توی محیط واقعی باید SSL رو فعال کنی
 $response = curl_exec($ch);
-curl_close($ch);
 
-$messages_from_api = [];
-if ($response) {
-    $data = json_decode($response, true);
-    if (isset($data['entries']) && $data['status']['code'] == 200) {
-        $messages_from_api = $data['entries'];
+if ($response === false) {
+    $error = "خطا در اتصال به API: " . curl_error($ch);
+    file_put_contents('sms_errors.log', "cURL Error: " . curl_error($ch) . " at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+} else {
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
-        // ذخیره پیامک‌ها توی دیتابیس
-        foreach ($messages_from_api as $msg) {
-            $reference_id = $msg['reference_id'];
-            $sender_mobile = $msg['number'];
-            $content = $msg['message'];
-            $received_at = $msg['datetime'];
-            $created_at = date('Y-m-d H:i:s'); // زمان فعلی به‌عنوان created_at
+    $messages_from_api = [];
+    if ($http_code == 200) {
+        $data = json_decode($response, true);
+        if (isset($data['entries']) && $data['status']['code'] == 200) {
+            $messages_from_api = $data['entries'];
 
-            // چک کن اگه پیامک قبلاً ذخیره نشده، ذخیره کن
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM received_sms WHERE reference_id = ? AND school_id = ?");
-            $stmt->execute([$reference_id, $school_id]);
-            $exists = $stmt->fetchColumn();
+            // ذخیره پیامک‌ها توی دیتابیس
+            foreach ($messages_from_api as $msg) {
+                $reference_id = $msg['reference_id'] ?? '';
+                $sender_mobile = $msg['number'] ?? '';
+                $content = $msg['message'] ?? '';
+                $received_at = $msg['datetime'] ?? date('Y-m-d H:i:s');
+                $created_at = date('Y-m-d H:i:s');
 
-            if (!$exists) {
-                $stmt = $pdo->prepare("INSERT INTO received_sms (school_id, reference_id, sender_mobile, content, received_at, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$school_id, $reference_id, $sender_mobile, $content, $received_at, $created_at]);
+                // چک کن اگه پیامک قبلاً ذخیره نشده، ذخیره کن
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM received_sms WHERE reference_id = ? AND school_id = ?");
+                $stmt->execute([$reference_id, $school_id]);
+                $exists = $stmt->fetchColumn();
+
+                if (!$exists) {
+                    $stmt = $pdo->prepare("INSERT INTO received_sms (school_id, reference_id, sender_mobile, content, received_at, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$school_id, $reference_id, $sender_mobile, $content, $received_at, $created_at]);
+                }
             }
+        } else {
+            $error = "خطا در دریافت پیامک‌ها: " . ($data['status']['message'] ?? 'پاسخ نامعتبر');
+            file_put_contents('sms_errors.log', "API Error: " . ($data['status']['message'] ?? 'No message') . " at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
         }
     } else {
-        $error = "خطا در دریافت پیامک‌ها: " . ($data['status']['message'] ?? 'پاسخ نامعتبر');
+        $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
+        file_put_contents('sms_errors.log', "HTTP Error $http_code at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
     }
 }
 
@@ -75,20 +97,14 @@ $query .= " ORDER BY received_at DESC";
 $stmt = $pdo->prepare($query);
 $stmt->execute($params);
 $messages = $stmt->fetchAll();
+
+// تنظیم عنوان صفحه
+$page_title = "دریافت پیامک - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>دریافت پیامک - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
@@ -175,28 +191,32 @@ $messages = $stmt->fetchAll();
                         <h3 class="card-title">لیست پیامک‌های دریافتی</h3>
                     </div>
                     <div class="card-body">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>شماره فرستنده</th>
-                                    <th>متن پیام</th>
-                                    <th>تاریخ دریافت</th>
-                                    <th>تاریخ ایجاد</th>
-                                    <th>شناسه مرجع</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($messages as $message): ?>
+                        <?php if (empty($messages)): ?>
+                            <div class="alert alert-info">هیچ پیامکی یافت نشد.</div>
+                        <?php else: ?>
+                            <table class="table table-bordered table-striped">
+                                <thead>
                                     <tr>
-                                        <td><?php echo htmlspecialchars($message['sender_mobile']); ?></td>
-                                        <td><?php echo htmlspecialchars($message['content']); ?></td>
-                                        <td><?php echo htmlspecialchars($message['received_at']); ?></td>
-                                        <td><?php echo htmlspecialchars($message['created_at']); ?></td>
-                                        <td><?php echo htmlspecialchars($message['reference_id']); ?></td>
+                                        <th>شماره فرستنده</th>
+                                        <th>متن پیام</th>
+                                        <th>تاریخ دریافت</th>
+                                        <th>تاریخ ایجاد</th>
+                                        <th>شناسه مرجع</th>
                                     </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($messages as $message): ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($message['sender_mobile']); ?></td>
+                                            <td><?php echo htmlspecialchars($message['content']); ?></td>
+                                            <td><?php echo date('Y-m-d H:i', strtotime($message['received_at'])); ?></td>
+                                            <td><?php echo date('Y-m-d H:i', strtotime($message['created_at'])); ?></td>
+                                            <td><?php echo htmlspecialchars($message['reference_id']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -207,8 +227,8 @@ $messages = $stmt->fetchAll();
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
 </body>
 </html>

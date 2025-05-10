@@ -1,9 +1,8 @@
 <?php
 require_once 'config.php';
-require_once 'menus.php'; // اضافه کردن فایل منوها
+require_once 'menus.php';
 session_start();
 
-// فعال کردن نمایش خطاها برای دیباگ
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -12,7 +11,6 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
@@ -22,30 +20,24 @@ if (!$user) {
 }
 $school_id = $user['school_id'];
 
-// دیباگ: لاگ school_id
 file_put_contents('debug.log', "School ID: $school_id\n", FILE_APPEND);
 
-// گرفتن نام مرکز از ترکیب فیلدها
 $stmt = $pdo->prepare("SELECT school_type, gender_type, school_name FROM schools WHERE id = ?");
 $stmt->execute([$school_id]);
 $school = $stmt->fetch();
 $school_name = $school ? trim($school['school_type'] . ' ' . $school['gender_type'] . ' ' . $school['school_name']) : 'مدرسه نامشخص';
 
-// فیلترها
-$start_date = isset($_GET['start_date']) ? filter_var($_GET['start_date'], FILTER_SANITIZE_STRING) : date('Y-m-d', strtotime('-30 days'));
-$end_date = isset($_GET['end_date']) ? filter_var($_GET['end_date'], FILTER_SANITIZE_STRING) : date('Y-m-d');
-$type = isset($_GET['type']) ? filter_var($_GET['type'], FILTER_SANITIZE_STRING) : 'all';
+$start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-30 days'));
+$end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+$type = isset($_GET['type']) ? $_GET['type'] : 'all';
 
-// جلوگیری از انتخاب تاریخ آینده برای end_date
 if (strtotime($end_date) > strtotime(date('Y-m-d'))) {
     $end_date = date('Y-m-d');
 }
 
-// اصلاح شرط تاریخ: مقایسه کامل با زمان
 $start_datetime = $start_date . ' 00:00:00';
 $end_datetime = $end_date . ' 23:59:59';
 
-// کوئری برای گرفتن تراکنش‌ها
 $query = "SELECT * FROM transactions WHERE school_id = ? AND created_at BETWEEN ? AND ?";
 $params = [$school_id, $start_datetime, $end_datetime];
 if ($type !== 'all') {
@@ -54,26 +46,19 @@ if ($type !== 'all') {
 }
 $query .= " ORDER BY created_at DESC";
 
-// دیباگ: لاگ کوئری و پارامترها
 file_put_contents('debug.log', "Query: $query\nParams: " . json_encode($params) . "\n", FILE_APPEND);
 
 $stmt = $pdo->prepare($query);
 $stmt->execute($params);
 $transactions = $stmt->fetchAll();
 
-// دیباگ: لاگ تعداد تراکنش‌ها و داده‌ها
 file_put_contents('debug.log', "Number of transactions fetched: " . count($transactions) . "\n", FILE_APPEND);
-foreach ($transactions as $index => $transaction) {
-    file_put_contents('debug.log', "Fetched transaction #$index: " . json_encode($transaction) . "\n", FILE_APPEND);
-}
 
-// کوئری برای چک کردن تعداد کل تراکنش‌ها برای school_id
 $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM transactions WHERE school_id = ?");
 $stmt->execute([$school_id]);
 $total_transactions = $stmt->fetch()['total'];
 file_put_contents('debug.log', "Total transactions for school_id $school_id: $total_transactions\n", FILE_APPEND);
 
-// تولید توضیحات فارسی
 function getTransactionDescription($transaction) {
     $details = $transaction['details'];
     if ($transaction['type'] === 'credit') {
@@ -88,13 +73,11 @@ function getTransactionDescription($transaction) {
         if ($transaction['status'] === 'successful') {
             $count = 1;
             $batchId = $transaction['payment_id'] ?? 'ندارد';
-            // چک کردن اگر details یه JSON باشه
             if (is_string($details) && (strpos($details, '{') === 0 || strpos($details, '[') === 0)) {
                 $decodedDetails = json_decode($details, true);
                 $count = isset($decodedDetails['count']) ? $decodedDetails['count'] : 1;
                 $batchId = isset($decodedDetails['batch_id']) ? $decodedDetails['batch_id'] : $batchId;
             } elseif (is_string($details)) {
-                // اگر details یه رشته متنی باشه (مثل ارسال تکی)
                 return $details . " با هزینه " . number_format(abs($transaction['amount'])) . " تومان";
             }
             if ($count > 1) {
@@ -109,15 +92,7 @@ function getTransactionDescription($transaction) {
     return "تراکنش نامشخص با مبلغ " . number_format($transaction['amount']) . " تومان";
 }
 
-// دیباگ: لاگ هر تراکنش قبل از رندر
-foreach ($transactions as $index => $transaction) {
-    file_put_contents('debug.log', "Rendering transaction #$index: " . json_encode($transaction) . "\n", FILE_APPEND);
-}
-
-// تنظیم عنوان صفحه
 $page_title = "تراکنش‌ها - سامانه پیامک مدارس";
-
-// لود فایل header.php
 require_once 'header.php';
 ?>
 
@@ -125,15 +100,14 @@ require_once 'header.php';
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
             <li class="nav-item">
-                <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+                <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
             </li>
         </ul>
         <ul class="navbar-nav ml-auto">
-            <li class="nav-item">
-                <a class="nav-link" href="logout.php">خروج</a>
-            </li>
+            <li class="nav-item"><a class="nav-link" href="logout.php">خروج</a></li>
         </ul>
     </nav>
+
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
             <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
@@ -145,7 +119,7 @@ require_once 'header.php';
                 </div>
             </div>
             <nav class="mt-2">
-                <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+                <ul class="nav nav-pills nav-sidebar flex-column">
                     <?php foreach ($menus as $key => $menu): ?>
                         <li class="nav-item">
                             <a href="<?php echo $menu['url']; ?>" class="nav-link <?php if (basename($_SERVER['PHP_SELF']) == basename($menu['url'])) echo 'active'; ?>">
@@ -158,18 +132,16 @@ require_once 'header.php';
             </nav>
         </div>
     </aside>
+
     <div class="content-wrapper">
         <section class="content-header">
-            <div class="container-fluid">
-                <h1>تراکنش‌ها</h1>
-            </div>
+            <div class="container-fluid"><h1>تراکنش‌ها</h1></div>
         </section>
+
         <section class="content">
             <div class="container-fluid">
                 <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">فیلتر تراکنش‌ها</h3>
-                    </div>
+                    <div class="card-header"><h3 class="card-title">فیلتر تراکنش‌ها</h3></div>
                     <div class="card-body">
                         <form method="GET" class="row">
                             <div class="col-md-3">
@@ -189,68 +161,41 @@ require_once 'header.php';
                                 </select>
                             </div>
                             <div class="col-md-3 align-self-end">
-                                <button type="submit" class="btn btn-primary">فیلتر</button>
+                                <button type="submit" class="btn btn-primary btn-block">فیلتر</button>
                             </div>
                         </form>
                     </div>
                 </div>
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h3 class="card-title">لیست تراکنش‌ها</h3>
-                    </div>
-                    <div class="card-body">
-                        <?php
-                        // دیباگ: چک کردن آرایه transactions
-                        file_put_contents('debug.log', "Transactions array check: " . (is_array($transactions) ? 'is array' : 'not array') . "\n", FILE_APPEND);
-                        ?>
-                        <?php if (empty($transactions) || !is_array($transactions)): ?>
-                            <div class="alert alert-info">هیچ تراکنشی در بازه زمانی انتخاب‌شده یافت نشد.</div>
-                        <?php else: ?>
-                            <table class="table table-bordered table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>مبلغ</th>
-                                        <th>نوع</th>
-                                        <th>وضعیت</th>
-                                        <th>شماره تراکنش</th>
-                                        <th>توضیحات</th>
-                                        <th>تاریخ</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($transactions as $index => $transaction): ?>
-                                        <?php
-                                        // دیباگ: لاگ هر ردیف قبل از رندر
-                                        file_put_contents('debug.log', "Rendering row #$index: " . json_encode($transaction) . "\n", FILE_APPEND);
-                                        ?>
-                                        <tr>
-                                            <td><?php echo number_format($transaction['amount']); ?> <?php echo $transaction['type'] === 'credit' ? 'تومان' : ''; ?></td>
-                                            <td><?php echo $transaction['type'] === 'credit' ? 'شارژ' : 'ارسال پیامک'; ?></td>
-                                            <td>
-                                                <span class="badge <?php echo $transaction['status'] === 'successful' ? 'badge-success' : ($transaction['status'] === 'failed' ? 'badge-danger' : 'badge-warning'); ?>">
-                                                    <?php echo $transaction['status'] === 'successful' ? 'موفق' : ($transaction['status'] === 'failed' ? 'ناموفق' : 'لغو شده'); ?>
-                                                </span>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($transaction['payment_id'] ?? 'ندارد'); ?></td>
-                                            <td><?php echo htmlspecialchars(getTransactionDescription($transaction)); ?></td>
-                                            <td><?php echo date('Y-m-d H:i', strtotime($transaction['created_at'])); ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        <?php endif; ?>
-                    </div>
-                </div>
+
+                <?php if (count($transactions) === 0): ?>
+                    <div class="alert alert-info">هیچ تراکنشی در بازه انتخابی یافت نشد.</div>
+                <?php else: ?>
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>تاریخ</th>
+                                <th>مبلغ</th>
+                                <th>نوع</th>
+                                <th>وضعیت</th>
+                                <th>توضیحات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($transactions as $txn): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($txn['created_at']); ?></td>
+                                    <td><?php echo number_format($txn['amount']); ?> تومان</td>
+                                    <td><?php echo $txn['type'] === 'credit' ? 'شارژ' : 'ارسال پیامک'; ?></td>
+                                    <td><?php echo $txn['status'] === 'successful' ? 'موفق' : ($txn['status'] === 'failed' ? 'ناموفق' : 'لغو شده'); ?></td>
+                                    <td><?php echo getTransactionDescription($txn); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
             </div>
         </section>
     </div>
-    <footer class="main-footer">
-        <strong>maktabsms © <?php echo date('Y'); ?></strong>
-    </footer>
 </div>
 
-<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
-</body>
-</html>
+<?php require_once 'footer.php'; ?>

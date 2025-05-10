@@ -8,9 +8,14 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
 
 // Function to get current balance from transactions
@@ -28,6 +33,10 @@ function get_balance($pdo, $school_id) {
 
 // Get current balance
 $balance = get_balance($pdo, $school_id);
+
+// Initialize variables
+$error = '';
+$success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
     $amount = filter_var($_POST['amount'], FILTER_SANITIZE_NUMBER_INT);
@@ -68,20 +77,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
         $error = "مبلغ باید حداقل 1000 تومان باشد.";
     }
 }
+
+// تنظیم عنوان صفحه
+$page_title = "شارژ پیامک - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>شارژ پیامک - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
@@ -119,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
             </nav>
         </div>
     </aside>
-      <div class="content-wrapper">
+    <div class="content-wrapper">
         <section class="content-header">
             <div class="container-fluid">
                 <h1>شارژ پیامک</h1>
@@ -127,12 +130,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
         </section>
         <section class="content">
             <div class="container-fluid">
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
-                <?php endif; ?>
+                <div id="message-container">
+                    <?php if (isset($success) && !empty($success)): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                    <?php endif; ?>
+                    <?php if (isset($error) && !empty($error)): ?>
+                        <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endif; ?>
+                </div>
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">موجودی فعلی: <?php echo number_format(get_balance($pdo, $school_id)); ?> تومان</h3>
+                        <h3 class="card-title">موجودی فعلی: <?php echo number_format($balance); ?> تومان</h3>
                     </div>
                     <div class="card-body">
                         <form method="POST">
@@ -157,8 +165,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['charge'])) {
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // محو شدن پیام‌های موفقیت و خطا بعد از 5 ثانیه
+        setTimeout(function() {
+            $('#message-container .alert').fadeOut('slow');
+        }, 5000);
+    });
+</script>
 </body>
 </html>

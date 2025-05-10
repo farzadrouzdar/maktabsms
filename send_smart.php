@@ -8,10 +8,49 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
+
+// گرفتن نام مرکز از ترکیب فیلدها
+$stmt = $pdo->prepare("SELECT school_type, gender_type, school_name FROM schools WHERE id = ?");
+$stmt->execute([$school_id]);
+$school = $stmt->fetch();
+$school_name = $school ? trim($school['school_type'] . ' ' . $school['gender_type'] . ' ' . $school['school_name']) : 'مدرسه نامشخص';
+
+// تابع برای محاسبه موجودی
+function get_balance($pdo, $school_id) {
+    $stmt = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) -
+            SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as balance
+        FROM transactions
+        WHERE school_id = ? AND status = 'successful'
+    ");
+    $stmt->execute([$school_id]);
+    return $stmt->fetch()['balance'] ?? 0;
+}
+
+// تابع برای محاسبه هزینه پیامک با هدر و فوتر
+function calculate_sms_cost($message, $school_name) {
+    $full_message = $school_name . "\n" . $message . "\n" . SMS_FOOTER_TEXT;
+    $message_length = mb_strlen($full_message, 'UTF-8');
+    $sms_parts = 1;
+    if ($message_length > SMS_MAX_CHARS_PART1) {
+        $remaining_chars = $message_length - SMS_MAX_CHARS_PART1;
+        $sms_parts += ceil($remaining_chars / SMS_MAX_CHARS_OTHER);
+    }
+    return $sms_parts * SMS_COST_PER_PART;
+}
+
+// گرفتن موجودی اولیه
+$balance = get_balance($pdo, $school_id);
 
 // Handle sending smart message
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])) {
@@ -20,10 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
     $message_template = filter_var($_POST['message'], FILTER_SANITIZE_STRING);
 
     if (!empty($group_id) && !empty($message_template)) {
-        // Add footer text to the template
-        $message_template .= ' ' . SMS_FOOTER_TEXT;
+        // اضافه کردن نام مدرسه به عنوان هدر
+        $message_template = $school_name . "\n" . $message_template . "\n" . SMS_FOOTER_TEXT;
 
-        // Fetch all contacts in the selected group with additional fields
+        // گرفتن تمام مخاطبین گروه با فیلدهای اضافی
         $stmt = $pdo->prepare("SELECT mobile, name, birth_date, field1, field2, field3, field4 FROM contacts WHERE school_id = ? AND group_id = ?");
         $stmt->execute([$school_id, $group_id]);
         $contacts = $stmt->fetchAll();
@@ -33,9 +72,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
         } else {
             $to = [];
             $text = [];
-            $debug_log = []; // For debugging
+            $debug_log = []; // برای دیباگ
 
-            // Prepare personalized messages
+            // محاسبه هزینه کل
+            $total_cost = 0;
             foreach ($contacts as $contact) {
                 $personalized_message = $message_template;
                 $replacements = [
@@ -52,14 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
                     '{field_4}' => $contact['field4'] ?? ''
                 ];
 
-                // Replace all variables
+                // جایگزینی تمام متغیرها
                 $personalized_message = str_replace(
                     array_keys($replacements),
                     array_values($replacements),
                     $personalized_message
                 );
 
-                // Remove extra newlines if fields are empty
+                // حذف خطوط خالی اضافی
                 $lines = explode("\r\n", $personalized_message);
                 $cleaned_lines = [];
                 foreach ($lines as $line) {
@@ -70,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
                 }
                 $personalized_message = implode("\r\n", $cleaned_lines);
 
-                // Check for missing replacements
+                // چک کردن متغیرهای جایگزین‌نشده
                 if (preg_match_all('/\{[^}]+\}/', $personalized_message, $matches)) {
                     $debug_log[] = [
                         'mobile' => $contact['mobile'],
@@ -80,10 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
                     ];
                     $error = "برخی متغیرها جایگزین نشدند: " . implode(', ', $matches[0]);
                     file_put_contents('smart_sms_debug.log', json_encode($debug_log, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-                    break; // Stop processing to show the error
+                    break; // توقف پردازش برای نمایش خطا
                 }
 
-                // Log the replacements for debugging
+                // لاگ جایگزینی‌ها برای دیباگ
                 $debug_log[] = [
                     'mobile' => $contact['mobile'],
                     'message' => $personalized_message,
@@ -92,40 +132,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
 
                 $to[] = $contact['mobile'];
                 $text[] = $personalized_message;
+
+                // محاسبه هزینه برای هر پیامک
+                $total_cost += calculate_sms_cost($personalized_message, $school_name);
             }
 
-            // Save debug log
+            // ذخیره لاگ دیباگ
             file_put_contents('smart_sms_debug.log', json_encode($debug_log, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
 
-            // Only proceed if no error
+            // فقط اگه خطایی نبود ادامه بده
             if (!isset($error)) {
-                // Prepare URL with parameters for Sabanovin API
-                $to_json = urlencode(json_encode($to));
-                $text_json = urlencode(json_encode($text));
-                $url = SABANOVIN_BASE_URL . '/sms/send_array.json?gateway=' . urlencode(SABANOVIN_GATEWAY) . '&to=' . $to_json . '&text=' . $text_json;
+                // چک کردن موجودی
+                if ($balance >= $total_cost) {
+                    // آماده‌سازی داده‌های POST به صورت آرایه
+                    $post_data = [
+                        'gateway' => SABANOVIN_GATEWAY,
+                        'to' => $to,
+                        'text' => $text,
+                    ];
 
-                // Send request to Sabanovin API
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_HTTPGET, true);
+                    // ارسال درخواست به API صبانوین با متد POST
+                    $ch = curl_init(SABANOVIN_BASE_URL . '/sms/send_array.json');
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_POST, true); // استفاده از متد POST
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_data)); // ارسال داده‌ها به صورت JSON
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                        'Content-Type: application/json',
+                    ]);
 
-                $response = curl_exec($ch);
-                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
+                    $response = curl_exec($ch);
+                    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
 
-                // Check API response
-                if ($http_code == 200) {
-                    $response_data = json_decode($response, true);
-                    if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
-                        $success_count = count($to);
-                        $success = "پیامک به $success_count مخاطب با موفقیت ارسال شد (Batch ID: " . $response_data['batch_id'] . ").";
+                    // بررسی پاسخ API
+                    if ($http_code == 200) {
+                        $response_data = json_decode($response, true);
+                        if (isset($response_data['status']['code']) && $response_data['status']['code'] == 200) {
+                            $success_count = count($to);
+
+                            // ثبت تراکنش
+                            $stmt = $pdo->prepare("
+                                INSERT INTO transactions (school_id, amount, status, created_at, details, type, payment_id)
+                                VALUES (?, ?, 'successful', NOW(), ?, 'debit', ?)
+                            ");
+                            $details = json_encode(['count' => $success_count, 'group_id' => $group_id]);
+                            $stmt->execute([$school_id, $total_cost, $details, $response_data['batch_id']]); // حذف علامت منفی
+
+                            $success = "پیامک به $success_count مخاطب با موفقیت ارسال شد (Batch ID: " . $response_data['batch_id'] . "). هزینه: " . number_format($total_cost) . " تومان.";
+                        } else {
+                            $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
+                            file_put_contents('sms_errors.log', "Failed smart batch: " . $response . "\n", FILE_APPEND);
+                        }
                     } else {
-                        $error = "خطا در ارسال پیامک: " . ($response_data['status']['message'] ?? 'پاسخ نامشخص از API');
-                        file_put_contents('sms_errors.log', "Failed smart batch: " . $response . "\n", FILE_APPEND);
+                        $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
+                        file_put_contents('sms_errors.log', "HTTP Error $http_code for smart group $group_id\n", FILE_APPEND);
                     }
                 } else {
-                    $error = "خطا در اتصال به API صبانوین (کد HTTP: $http_code)";
-                    file_put_contents('sms_errors.log', "HTTP Error $http_code for smart group $group_id\n", FILE_APPEND);
+                    $error = "موجودی کافی نیست. هزینه کل: " . number_format($total_cost) . " تومان، موجودی شما: " . number_format($balance) . " تومان.";
                 }
             }
         }
@@ -134,30 +197,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_smart_message'])
     }
 }
 
-// Fetch all contact groups
+// گرفتن تمام گروه‌های مخاطبین
 $stmt = $pdo->prepare("SELECT * FROM contact_groups WHERE school_id = ? ORDER BY created_at DESC");
 $stmt->execute([$school_id]);
 $groups = $stmt->fetchAll();
 
-// Fetch approved smart drafts
+// گرفتن پیش‌نویس‌های هوشمند تأییدشده
 $stmt = $pdo->prepare("SELECT * FROM drafts WHERE school_id = ? AND status = 'approved' AND type = 'smart' ORDER BY created_at DESC");
 $stmt->execute([$school_id]);
 $approved_drafts = $stmt->fetchAll();
+
+// تنظیم عنوان صفحه
+$page_title = "ارسال پیامک هوشمند - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ارسال پیامک هوشمند - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
+
 <div class="wrapper">
-    <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
             <li class="nav-item">
@@ -170,7 +227,6 @@ $approved_drafts = $stmt->fetchAll();
             </li>
         </ul>
     </nav>
-    <!-- Main Sidebar -->
     <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="dashboard.php" class="brand-link">
             <img src="https://behfarda.com/upload/image/BehFarda_FA_Horizontal.png" alt="Logo">
@@ -195,88 +251,213 @@ $approved_drafts = $stmt->fetchAll();
             </nav>
         </div>
     </aside>
-    <!-- Content Wrapper -->
-    <div class="content-wrapper">
-        <section class="content-header">
-            <div class="container-fluid">
-                <h1>ارسال پیامک هوشمند</h1>
-            </div>
-        </section>
-        <section class="content">
-            <div class="container-fluid">
-                <?php if (isset($success)): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
-                <?php endif; ?>
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
-                <?php endif; ?>
-                <!-- Send Smart Form -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">ارسال پیامک هوشمند به گروهی از مخاطبین</h3>
+        <div class="content-wrapper">
+            <section class="content-header">
+                <div class="container-fluid">
+                    <h1>ارسال پیامک هوشمند</h1>
+                </div>
+            </section>
+            <section class="content">
+                <div class="container-fluid">
+                    <p>موجودی شما: <?php echo number_format($balance); ?> تومان</p>
+                    <div id="message-container">
+                        <?php if (isset($success)): ?>
+                            <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                        <?php endif; ?>
+                        <?php if (isset($error)): ?>
+                            <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                        <?php endif; ?>
                     </div>
-                    <div class="card-body">
-                        <form method="POST">
-                            <div class="form-group">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">ارسال پیامک هوشمند به گروهی از مخاطبین</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" id="smart-sms-form">
+                                <div class
                                 <label for="group_id">انتخاب گروه</label>
-                                <select class="form-control" name="group_id" required>
-                                    <option value="">-- گروه را انتخاب کنید --</option>
-                                    <?php foreach ($groups as $group): ?>
-                                        <option value="<?php echo $group['id']; ?>">
-                                            <?php echo htmlspecialchars($group['group_name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="draft_id">انتخاب پیش‌نویس هوشمند</label>
-                                <select class="form-control" name="draft_id" id="draft_id">
-                                    <option value="">-- بدون پیش‌نویس --</option>
-                                    <?php foreach ($approved_drafts as $draft): ?>
-                                        <option value="<?php echo $draft['id']; ?>">
-                                            <?php echo htmlspecialchars($draft['title']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="message">متن پیش‌نویس (با متغیرها مثل {name}, {mobile}, {birth_date}, {field1} تا {field4})</label>
-                                <textarea class="form-control" name="message" id="message" rows="3" required></textarea>
-                                <small class="form-text text-muted">متن پیش‌نویس رو وارد کن یا از پیش‌نویس انتخاب‌شده استفاده کن.</small>
-                            </div>
-                            <button type="submit" name="send_smart_message" class="btn btn-primary">ارسال پیامک هوشمند</button>
-                        </form>
+                                    <select class="form-control" name="group_id" id="group_id" required>
+                                        <option value="">-- گروه را انتخاب کنید --</option>
+                                        <?php foreach ($groups as $group): ?>
+                                            <option value="<?php echo $group['id']; ?>">
+                                                <?php echo htmlspecialchars($group['group_name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="draft_id">انتخاب پیش‌نویس هوشمند</label>
+                                    <select class="form-control draft-select" name="draft_id" id="draft_id">
+                                        <option value="">-- بدون پیش‌نویس --</option>
+                                        <?php foreach ($approved_drafts as $draft): ?>
+                                            <option value="<?php echo $draft['id']; ?>">
+                                                <?php echo htmlspecialchars($draft['title']); ?> <span class="badge badge-success">هوشمند</span>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="message">متن پیام</label>
+                                    <div class="message-header">
+                                        <i class="fas fa-lock lock-icon"></i>
+                                        <span class="text"><?php echo htmlspecialchars($school_name); ?></span>
+                                    </div>
+                                    <textarea class="form-control message-input" name="message" id="message" rows="5" required data-header="<?php echo htmlspecialchars($school_name); ?>" data-footer="<?php echo htmlspecialchars(SMS_FOOTER_TEXT); ?>"></textarea>
+                                    <div class="message-footer">
+                                        <i class="fas fa-lock lock-icon"></i>
+                                        <span class="text"><?php echo htmlspecialchars(SMS_FOOTER_TEXT); ?></span>
+                                    </div>
+                                    <small class="form-text text-muted">می‌توانید از متغیرهایی مثل {name}، {mobile}، {birth_date}، {field1} تا {field4} استفاده کنید. هدر و فوتر به‌صورت خودکار اضافه می‌شوند.</small>
+                                    <div class="mt-2">
+                                        <span id="char_count" class="counter-animated">0</span> کاراکتر |
+                                        <span id="sms_parts" class="counter-animated">1</span> پیامک |
+                                        هزینه تخمینی: <span id="cost_estimate" class="counter-animated">0</span> تومان
+                                    </div>
+                                </div>
+                                <button type="submit" name="send_smart_message" class="btn btn-primary" id="send-smart-btn">
+                                    <span class="button-text">ارسال پیامک هوشمند</span>
+                                    <span class="loading-text" style="display: none;">در حال ارسال...</span>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
+            </section>
+        </div>
+        <footer class="main-footer">
+            <strong>maktabsms © <?php echo date('Y'); ?></strong>
+        </footer>
     </div>
-    <!-- Footer -->
-    <footer class="main-footer">
-        <strong>maktabsms © <?php echo date('Y'); ?></strong>
-    </footer>
-</div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
-<script>
-    $(document).ready(function() {
-        $('#draft_id').change(function() {
-            var draft_id = $(this).val();
-            if (draft_id) {
+
+    <script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+    <script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Function to update character count, SMS parts, and cost with animation
+            function updateMessageStats(textarea, charCountElement, smsPartsElement, costElement) {
+                try {
+                    var userText = textarea.val() || '';
+                    var header = textarea.data('header') || '';
+                    var footer = textarea.data('footer') || '';
+                    var fullMessage = header + "\n" + userText + "\n" . footer;
+                    var char_count = fullMessage.length; // Simple length for now
+                    var sms_parts = 1;
+                    if (char_count > <?php echo SMS_MAX_CHARS_PART1; ?>) {
+                        var remaining_chars = char_count - <?php echo SMS_MAX_CHARS_PART1; ?>;
+                        sms_parts += Math.ceil(remaining_chars / <?php echo SMS_MAX_CHARS_OTHER; ?>);
+                    }
+                    var cost = sms_parts * <?php echo SMS_COST_PER_PART; ?>;
+
+                    charCountElement.text(char_count);
+                    smsPartsElement.text(sms_parts);
+                    costElement.text(cost.toFixed(2));
+
+                    // Add animation
+                    [charCountElement, smsPartsElement, costElement].forEach(function(el) {
+                        el.addClass('counter-blink');
+                    });
+                } catch (e) {
+                    console.error('Error in updateMessageStats:', e);
+                    $('#message-container').html('<div class="alert alert-danger">خطا در شمارش: ' + e.message + '</div>');
+                    charCountElement.text('0');
+                    smsPartsElement.text('1');
+                    costElement.text('0.00');
+                }
+            }
+
+            // Handle draft selection
+            $('#draft_id').on('change', function() {
+                var draft_id = $(this).val();
+                var textarea = $('#message');
+                if (draft_id) {
+                    $.ajax({
+                        url: 'get_draft.php',
+                        type: 'POST',
+                        data: { draft_id: draft_id },
+                        success: function(response) {
+                            textarea.val(response);
+                            updateMessageStats(textarea, $('#char_count'), $('#sms_parts'), $('#cost_estimate'));
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('Error fetching draft:', error);
+                            $('#message-container').html('<div class="alert alert-danger">خطا در بارگذاری پیش‌نویس</div>');
+                        }
+                    });
+                } else {
+                    textarea.val('');
+                    updateMessageStats(textarea, $('#char_count'), $('#sms_parts'), $('#cost_estimate'));
+                }
+            });
+
+            // Live character count and cost estimation
+            $('#message').on('input', function() {
+                updateMessageStats($(this), $('#char_count'), $('#sms_parts'), $('#cost_estimate'));
+            });
+
+            // Initialize stats on page load
+            updateMessageStats($('#message'), $('#char_count'), $('#sms_parts'), $('#cost_estimate'));
+
+            // Handle form submission with loading state
+            $('#smart-sms-form').on('submit', function(e) {
+                var sendBtn = $('#send-smart-btn');
+                sendBtn.prop('disabled', true);
+                sendBtn.find('.button-text').hide();
+                sendBtn.find('.loading-text').show();
+
+                // Submit form via AJAX
                 $.ajax({
-                    url: 'get_draft.php',
+                    url: 'send_smart.php',
                     type: 'POST',
-                    data: { draft_id: draft_id },
+                    data: $(this).serialize() + '&send_smart_message=1',
+                    dataType: 'json',
                     success: function(response) {
-                        $('#message').val(response);
+                        if (response.success) {
+                            $('#message-container').html('<div class="alert alert-success">' + response.message + '</div>');
+                            $('#smart-sms-form')[0].reset();
+                            updateMessageStats($('#message'), $('#char_count'), $('#sms_parts'), $('#cost_estimate'));
+                        } else {
+                            $('#message-container').html('<div class="alert alert-danger">' + response.error + '</div>');
+                        }
+                        setTimeout(() => $('#message-container').empty(), 5000);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error sending smart SMS:', error);
+                        $('#message-container').html('<div class="alert alert-danger">خطا در ارسال پیامک</div>');
+                    },
+                    complete: function() {
+                        sendBtn.prop('disabled', false);
+                        sendBtn.find('.button-text').show();
+                        sendBtn.find('.loading-text').hide();
                     }
                 });
-            } else {
-                $('#message').val('');
-            }
+
+                return false; // Prevent default form submission
+            });
         });
-    });
-</script>
-</body>
-</html>
+    </script>
+    <style>
+        .lock-icon {
+            color: #6c757d;
+            margin-left: 5px;
+        }
+        .message-header, .message-footer {
+            background-color: #f8f9fa;
+            padding: 5px 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        .message-footer {
+            margin-top: 5px;
+        }
+        .counter-animated {
+            transition: all 0.3s ease;
+        }
+        .counter-blink {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+    </body>
+    </html>

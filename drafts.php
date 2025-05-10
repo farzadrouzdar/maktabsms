@@ -8,9 +8,14 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
 
 // Handle group creation
@@ -20,6 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_group'])) {
         $stmt = $pdo->prepare("INSERT INTO draft_groups (school_id, group_name) VALUES (?, ?)");
         $stmt->execute([$school_id, $group_name]);
         $success = "گروه با موفقیت ایجاد شد.";
+        header('Location: drafts.php');
+        exit;
     } else {
         $error = "نام گروه نمی‌تواند خالی باشد.";
     }
@@ -33,6 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_group'])) {
         $stmt = $pdo->prepare("UPDATE draft_groups SET group_name = ? WHERE id = ? AND school_id = ?");
         $stmt->execute([$group_name, $group_id, $school_id]);
         $success = "گروه با موفقیت به‌روزرسانی شد.";
+        header('Location: drafts.php');
+        exit;
     } else {
         $error = "نام گروه نمی‌تواند خالی باشد.";
     }
@@ -55,6 +64,10 @@ if (isset($_GET['edit_group'])) {
     $stmt = $pdo->prepare("SELECT * FROM draft_groups WHERE id = ? AND school_id = ?");
     $stmt->execute([$group_id, $school_id]);
     $edit_group = $stmt->fetch();
+    if (!$edit_group) {
+        header('Location: drafts.php');
+        exit;
+    }
 }
 
 // Fetch draft for editing
@@ -102,19 +115,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
         $error = "لطفاً تمام فیلدها را به درستی وارد کنید.";
     }
 }
+
+// Fetch all draft groups
+$stmt_groups = $pdo->prepare("SELECT * FROM draft_groups WHERE school_id = ? ORDER BY created_at DESC");
+$stmt_groups->execute([$school_id]);
+$groups = $stmt_groups->fetchAll();
+
+// تنظیم عنوان صفحه
+$page_title = "پیش‌نویس‌ها - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>پیش‌نویس‌ها - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
+
 <div class="wrapper">
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
         <ul class="navbar-nav">
@@ -160,12 +173,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
         </section>
         <section class="content">
             <div class="container-fluid">
-                <?php if (isset($success)): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
-                <?php endif; ?>
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
-                <?php endif; ?>
+                <div id="message-container">
+                    <?php if (isset($success)): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                    <?php endif; ?>
+                    <?php if (isset($error)): ?>
+                        <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endif; ?>
+                </div>
 
                 <?php if (!$edit_group && !$edit_draft): ?>
                     <div class="card">
@@ -180,6 +195,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
                                 </div>
                                 <button type="submit" name="create_group" class="btn btn-primary">ایجاد گروه</button>
                             </form>
+                        </div>
+                    </div>
+
+                    <!-- نمایش لیست گروه‌ها -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">لیست گروه‌های پیش‌نویس</h3>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-bordered table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>نام گروه</th>
+                                        <th>تاریخ ایجاد</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($groups)): ?>
+                                        <tr>
+                                            <td colspan="4" class="text-center">هیچ گروهی یافت نشد.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($groups as $index => $group): ?>
+                                            <tr>
+                                                <td><?php echo $index + 1; ?></td>
+                                                <td><?php echo htmlspecialchars($group['group_name']); ?></td>
+                                                <td><?php echo date('Y-m-d H:i', strtotime($group['created_at'])); ?></td>
+                                                <td>
+                                                    <a href="?edit_group=<?php echo $group['id']; ?>" class="btn btn-sm btn-warning">ویرایش</a>
+                                                    <a href="?delete_group=<?php echo $group['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این گروه را حذف کنید؟');">حذف</a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 <?php elseif ($edit_group): ?>
@@ -236,7 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
                         <h3 class="card-title">لیست پیش‌نویس‌های تایید شده</h3>
                     </div>
                     <div class="card-body">
-                        <table class="table table-bordered">
+                        <table class="table table-bordered table-striped">
                             <thead>
                                 <tr>
                                     <th>#</th>
@@ -278,7 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
                                             <td><?php echo htmlspecialchars($draft['title']); ?></td>
                                             <td><?php echo htmlspecialchars($draft['type_fa']); ?></td>
                                             <td><?php echo htmlspecialchars(mb_substr($draft['message'], 0, 50, 'UTF-8')) . '...'; ?></td>
-                                            <td><?php echo date('Y-m-d H:i:s', strtotime($draft['created_at'])); ?></td>
+                                            <td><?php echo date('Y-m-d H:i', strtotime($draft['created_at'])); ?></td>
                                             <td>
                                                 <a href="?edit_draft=<?php echo $draft['id']; ?>" class="btn btn-sm btn-warning">ویرایش</a>
                                                 <a href="?delete_draft=<?php echo $draft['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این پیش‌نویس را حذف کنید؟');">حذف</a>
@@ -297,8 +350,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_draft'])) {
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // محو شدن پیام‌های موفقیت و خطا بعد از 5 ثانیه
+        setTimeout(function() {
+            $('#message-container .alert').fadeOut('slow');
+        }, 5000);
+    });
+</script>
 </body>
 </html>

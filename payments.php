@@ -8,28 +8,28 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// گرفتن اطلاعات کاربر
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+if (!$user) {
+    header('Location: logout.php');
+    exit;
+}
 $school_id = $user['school_id'];
 
+// گرفتن لیست پرداخت‌ها
 $stmt = $pdo->prepare("SELECT * FROM payments WHERE school_id = ? ORDER BY created_at DESC");
 $stmt->execute([$school_id]);
 $payments = $stmt->fetchAll();
+
+// تنظیم عنوان صفحه
+$page_title = "گزارش پرداخت‌ها - سامانه پیامک مدارس";
+
+// لود فایل header.php
+require_once 'header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>گزارش پرداخت‌ها - سامانه پیامک مدارس</title>
-    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/fontawesome-free/css/all.min.css">
-    <link rel="stylesheet" href="assets/adminlte/plugins/rtl/rtl.css">
-    <link rel="stylesheet" href="assets/css/custom.css">
-</head>
-<body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
     <!-- Navbar -->
     <nav class="main-header navbar navbar-expand navbar-white navbar-light">
@@ -83,26 +83,34 @@ $payments = $stmt->fetchAll();
                         <h3 class="card-title">تاریخچه پرداخت‌های مدرسه</h3>
                     </div>
                     <div class="card-body">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>مبلغ (تومان)</th>
-                                    <th>شماره تراکنش</th>
-                                    <th>وضعیت</th>
-                                    <th>تاریخ</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($payments as $payment): ?>
+                        <?php if (empty($payments)): ?>
+                            <div class="alert alert-info">هیچ پرداختی یافت نشد.</div>
+                        <?php else: ?>
+                            <table class="table table-bordered table-striped">
+                                <thead>
                                     <tr>
-                                        <td><?php echo number_format($payment['amount']); ?></td>
-                                        <td><?php echo $payment['authority']; ?></td>
-                                        <td><?php echo $payment['status']; ?></td>
-                                        <td><?php echo $payment['created_at']; ?></td>
+                                        <th>مبلغ (تومان)</th>
+                                        <th>شماره تراکنش</th>
+                                        <th>وضعیت</th>
+                                        <th>تاریخ</th>
                                     </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($payments as $payment): ?>
+                                        <tr>
+                                            <td><?php echo number_format($payment['amount']); ?></td>
+                                            <td><?php echo htmlspecialchars($payment['authority']); ?></td>
+                                            <td>
+                                                <span class="badge <?php echo ($payment['status'] === 'successful') ? 'badge-success' : 'badge-danger'; ?>">
+                                                    <?php echo htmlspecialchars($payment['status']); ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo date('Y-m-d H:i', strtotime($payment['created_at'])); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -113,8 +121,8 @@ $payments = $stmt->fetchAll();
         <strong>maktabsms © <?php echo date('Y'); ?></strong>
     </footer>
 </div>
-<script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
-<script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/jquery/jquery.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="<?php echo BASE_URL; ?>assets/adminlte/dist/js/adminlte.min.js"></script>
 </body>
 </html>
