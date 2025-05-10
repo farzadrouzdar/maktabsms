@@ -30,7 +30,7 @@ $stmt->execute([$school_id]);
 $balance = $stmt->fetch()['balance'] ?? 0;
 
 // Get total sent SMS
-$stmt = $pdo->prepare("SELECT COUNT(*) as total FROM sms_logs WHERE school_id = ? AND status = 'sent'");
+$stmt = $pdo->prepare("SELECT COUNT(*) as total FROM single_sms WHERE school_id = ? AND status = 'sent'");
 $stmt->execute([$school_id]);
 $total_sms = $stmt->fetch()['total'];
 

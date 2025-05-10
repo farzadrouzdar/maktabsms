@@ -35,20 +35,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_group'])) {
 // Handle adding a new contact
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_contact'])) {
     $group_id = filter_var($_POST['group_id'], FILTER_SANITIZE_NUMBER_INT);
-    $name = filter_var($_POST['name'], FILTER_SANITIZE_STRING);
+    $student_name = filter_var($_POST['student_name'], FILTER_SANITIZE_STRING);
     $mobile = filter_var($_POST['mobile'], FILTER_SANITIZE_STRING);
     $birth_date = filter_var($_POST['birth_date'], FILTER_SANITIZE_STRING);
-    $field1 = filter_var($_POST['field1'], FILTER_SANITIZE_STRING);
-    $field2 = filter_var($_POST['field2'], FILTER_SANITIZE_STRING);
-    $field3 = filter_var($_POST['field3'], FILTER_SANITIZE_STRING);
-    $field4 = filter_var($_POST['field4'], FILTER_SANITIZE_STRING);
+    $parent_name = filter_var($_POST['parent_name'], FILTER_SANITIZE_STRING);
 
     // اعتبارسنجی ساده شماره موبایل
     if (!preg_match('/^09[0-9]{9}$/', $mobile)) {
         $error = "شماره موبایل باید با 09 شروع شود و 11 رقم باشد.";
     } elseif (!empty($group_id)) {
-        $stmt = $pdo->prepare("INSERT INTO contacts (school_id, group_id, name, mobile, birth_date, field1, field2, field3, field4) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$school_id, $group_id, $name, $mobile, $birth_date, $field1, $field2, $field3, $field4]);
+        $stmt = $pdo->prepare("INSERT INTO contacts (school_id, group_id, student_name, mobile, birth_date, parent_name) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$school_id, $group_id, $student_name, $mobile, $birth_date, $parent_name]);
         $success = "مخاطب با موفقیت اضافه شد.";
         header('Location: phonebook.php?group=' . $group_id);
         exit;
@@ -61,20 +58,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_contact'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_contact'])) {
     $contact_id = filter_var($_POST['contact_id'], FILTER_SANITIZE_NUMBER_INT);
     $group_id = filter_var($_POST['group_id'], FILTER_SANITIZE_NUMBER_INT);
-    $name = filter_var($_POST['name'], FILTER_SANITIZE_STRING);
+    $student_name = filter_var($_POST['student_name'], FILTER_SANITIZE_STRING);
     $mobile = filter_var($_POST['mobile'], FILTER_SANITIZE_STRING);
     $birth_date = filter_var($_POST['birth_date'], FILTER_SANITIZE_STRING);
-    $field1 = filter_var($_POST['field1'], FILTER_SANITIZE_STRING);
-    $field2 = filter_var($_POST['field2'], FILTER_SANITIZE_STRING);
-    $field3 = filter_var($_POST['field3'], FILTER_SANITIZE_STRING);
-    $field4 = filter_var($_POST['field4'], FILTER_SANITIZE_STRING);
+    $parent_name = filter_var($_POST['parent_name'], FILTER_SANITIZE_STRING);
 
     // اعتبارسنجی ساده شماره موبایل
     if (!preg_match('/^09[0-9]{9}$/', $mobile)) {
         $error = "شماره موبایل باید با 09 شروع شود و 11 رقم باشد.";
     } elseif (!empty($contact_id) && !empty($group_id)) {
-        $stmt = $pdo->prepare("UPDATE contacts SET group_id = ?, name = ?, mobile = ?, birth_date = ?, field1 = ?, field2 = ?, field3 = ?, field4 = ? WHERE id = ? AND school_id = ?");
-        $stmt->execute([$group_id, $name, $mobile, $birth_date, $field1, $field2, $field3, $field4, $contact_id, $school_id]);
+        $stmt = $pdo->prepare("UPDATE contacts SET group_id = ?, student_name = ?, mobile = ?, birth_date = ?, parent_name = ? WHERE id = ? AND school_id = ?");
+        $stmt->execute([$group_id, $student_name, $mobile, $birth_date, $parent_name, $contact_id, $school_id]);
         $success = "مخاطب با موفقیت ویرایش شد.";
         header('Location: phonebook.php?group=' . $group_id);
         exit;
@@ -127,7 +121,7 @@ if ($selected_group) {
     $query = "SELECT c.*, cg.group_name FROM contacts c JOIN contact_groups cg ON c.group_id = cg.id WHERE c.school_id = ? AND c.group_id = ?";
     $params = [$school_id, $selected_group];
     if (!empty($search_query)) {
-        $query .= " AND (c.name LIKE ? OR c.mobile LIKE ?)";
+        $query .= " AND (c.student_name LIKE ? OR c.mobile LIKE ?)";
         $search_term = "%$search_query%";
         $params = array_merge($params, [$search_term, $search_term]);
     }
@@ -249,7 +243,7 @@ require_once 'header.php';
                                                     <div class="modal-header">
                                                         <h5 class="modal-title" id="editGroupModalLabel">ویرایش گروه</h5>
                                                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                            <span aria-hidden="true">&times;</span>
+                                                            <span aria-hidden="true">×</span>
                                                         </button>
                                                     </div>
                                                     <div class="modal-body">
@@ -297,8 +291,8 @@ require_once 'header.php';
                                 <div class="row">
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label for="name">نام</label>
-                                            <input type="text" class="form-control" name="name">
+                                            <label for="student_name">نام دانش‌آموز</label>
+                                            <input type="text" class="form-control" name="student_name">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
@@ -317,28 +311,8 @@ require_once 'header.php';
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-group">
-                                            <label for="field1">فیلد ۱</label>
-                                            <input type="text" class="form-control" name="field1">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label for="field2">فیلد ۲</label>
-                                            <input type="text" class="form-control" name="field2">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label for="field3">فیلد ۳</label>
-                                            <input type="text" class="form-control" name="field3">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-3">
-                                        <div class="form-group">
-                                            <label for="field4">فیلد ۴</label>
-                                            <input type="text" class="form-control" name="field4">
+                                            <label for="parent_name">نام ولی دانش‌آموز</label>
+                                            <input type="text" class="form-control" name="parent_name">
                                         </div>
                                     </div>
                                     <div class="col-md-3">
@@ -354,26 +328,20 @@ require_once 'header.php';
                                 <table class="table table-bordered table-striped mt-3">
                                     <thead>
                                         <tr>
-                                            <th>نام</th>
+                                            <th>نام دانش‌آموز</th>
                                             <th>شماره موبایل</th>
                                             <th>تاریخ تولد</th>
-                                            <th>فیلد ۱</th>
-                                            <th>فیلد ۲</th>
-                                            <th>فیلد ۳</th>
-                                            <th>فیلد ۴</th>
+                                            <th>نام ولی دانش‌آموز</th>
                                             <th>عملیات</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php foreach ($contacts as $contact): ?>
                                             <tr>
-                                                <td><?php echo htmlspecialchars($contact['name']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['student_name']) ?: '-'; ?></td>
                                                 <td><?php echo htmlspecialchars($contact['mobile']); ?></td>
                                                 <td><?php echo htmlspecialchars($contact['birth_date']) ?: '-'; ?></td>
-                                                <td><?php echo htmlspecialchars($contact['field1']) ?: '-'; ?></td>
-                                                <td><?php echo htmlspecialchars($contact['field2']) ?: '-'; ?></td>
-                                                <td><?php echo htmlspecialchars($contact['field3']) ?: '-'; ?></td>
-                                                <td><?php echo htmlspecialchars($contact['field4']) ?: '-'; ?></td>
+                                                <td><?php echo htmlspecialchars($contact['parent_name']) ?: '-'; ?></td>
                                                 <td>
                                                     <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#editModal<?php echo $contact['id']; ?>">ویرایش</button>
                                                     <a href="phonebook.php?delete_contact=<?php echo $contact['id']; ?>&group=<?php echo $selected_group; ?>" class="btn btn-danger btn-sm" onclick="return confirm('آیا مطمئن هستید که می‌خواهید این مخاطب را حذف کنید؟');">حذف</a>
@@ -386,7 +354,7 @@ require_once 'header.php';
                                                         <div class="modal-header">
                                                             <h5 class="modal-title" id="editModalLabel">ویرایش مخاطب</h5>
                                                             <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                                <span aria-hidden="true">&times;</span>
+                                                                <span aria-hidden="true">×</span>
                                                             </button>
                                                         </div>
                                                         <div class="modal-body">
@@ -394,8 +362,8 @@ require_once 'header.php';
                                                                 <input type="hidden" name="contact_id" value="<?php echo $contact['id']; ?>">
                                                                 <input type="hidden" name="group_id" value="<?php echo $contact['group_id']; ?>">
                                                                 <div class="form-group">
-                                                                    <label for="name">نام</label>
-                                                                    <input type="text" class="form-control" name="name" value="<?php echo htmlspecialchars($contact['name']); ?>">
+                                                                    <label for="student_name">نام دانش‌آموز</label>
+                                                                    <input type="text" class="form-control" name="student_name" value="<?php echo htmlspecialchars($contact['student_name']); ?>">
                                                                 </div>
                                                                 <div class="form-group">
                                                                     <label for="mobile">شماره موبایل</label>
@@ -406,20 +374,8 @@ require_once 'header.php';
                                                                     <input type="date" class="form-control" name="birth_date" value="<?php echo htmlspecialchars($contact['birth_date']); ?>">
                                                                 </div>
                                                                 <div class="form-group">
-                                                                    <label for="field1">فیلد ۱</label>
-                                                                    <input type="text" class="form-control" name="field1" value="<?php echo htmlspecialchars($contact['field1']); ?>">
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label for="field2">فیلد ۲</label>
-                                                                    <input type="text" class="form-control" name="field2" value="<?php echo htmlspecialchars($contact['field2']); ?>">
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label for="field3">فیلد ۳</label>
-                                                                    <input type="text" class="form-control" name="field3" value="<?php echo htmlspecialchars($contact['field3']); ?>">
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label for="field4">فیلد ۴</label>
-                                                                    <input type="text" class="form-control" name="field4" value="<?php echo htmlspecialchars($contact['field4']); ?>">
+                                                                    <label for="parent_name">نام ولی دانش‌آموز</label>
+                                                                    <input type="text" class="form-control" name="parent_name" value="<?php echo htmlspecialchars($contact['parent_name']); ?>">
                                                                 </div>
                                                                 <button type="submit" name="edit_contact" class="btn btn-primary">ذخیره تغییرات</button>
                                                             </form>

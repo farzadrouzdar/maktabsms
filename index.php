@@ -5,103 +5,135 @@ session_start();
 // تنظیم عنوان صفحه
 $page_title = "ورود به سامانه پیامک مدارس";
 
-// ایجاد زمان انقضای OTP (مثلاً 90 ثانیه)
+// ایجاد زمان انقضای OTP (به ثانیه)
 define('OTP_EXPIRY_SECONDS', 90);
+
+// تابع برای تولید کد OTP
+function generateOTP() {
+    return rand(100000, 999999);
+}
+
+// تابع برای ارسال پیامک
+function sendSMS($mobile, $message) {
+    $url = SABANOVIN_BASE_URL . "/sms/send.json";
+    $data = [
+        'gateway' => SABANOVIN_GATEWAY,
+        'to'      => $mobile,
+        'text'    => $message
+    ];
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    // لاگ پاسخ سرویس پیامک
+    error_log("[SMS RESPONSE] " . date('Y-m-d H:i:s') . " To: {$mobile} Response: {$response} Error: {$error}\n", 3, 'sms_log.txt');
+
+    return ($response !== false);
+}
 
 // بررسی پارامتر step برای بازگشت به مرحله ورود شماره
 if (isset($_GET['step']) && $_GET['step'] === 'initial') {
     $_SESSION['step'] = 'initial';
-    unset($_SESSION['otp'], $_SESSION['otp_sent_at'], $_SESSION['resend_success']); // پاک کردن فلگ موفقیت ارسال مجدد
+    unset($_SESSION['otp'], $_SESSION['mobile'], $_SESSION['otp_sent_at'], $_SESSION['resend_success'], $_SESSION['resend_wait_until']);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // مرحلهٔ ارسال موبایل و تولید OTP
     if (isset($_POST['mobile'])) {
         $mobile = filter_var($_POST['mobile'], FILTER_SANITIZE_STRING);
         if (preg_match('/^09[0-9]{9}$/', $mobile)) {
-            $otp = rand(100000, 999999);
-            $_SESSION['otp'] = $otp;
-            $_SESSION['mobile'] = $mobile;
-            $_SESSION['otp_sent_at'] = time();
-            $_SESSION['step'] = 'verify';
-            unset($_SESSION['resend_success']); // پاک کردن فلگ موفقیت ارسال مجدد
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE mobile = ?");
+            $stmt->execute([$mobile]);
+            $userExists = $stmt->fetchColumn();
 
-            $message = "کد ورود شما: $otp\n" . SMS_FOOTER_TEXT;
-            $url = SABANOVIN_BASE_URL . "/sms/send.json";
-            $data = [
-                'gateway' => SABANOVIN_GATEWAY,
-                'to' => $mobile,
-                'text' => $message
-            ];
+            if ($userExists) {
+                $otp = generateOTP();
+                $_SESSION['otp'] = $otp;
+                $_SESSION['mobile'] = $mobile;
+                $_SESSION['otp_sent_at'] = time();
+                $_SESSION['step'] = 'verify';
+                unset($_SESSION['resend_success'], $_SESSION['resend_wait_until']);
 
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            $response = curl_exec($ch);
-            if ($response === false) {
-                $error = "خطا در اتصال به سرویس پیامک: " . curl_error($ch);
+                $message = "کد ورود شما: $otp\n" . SMS_FOOTER_TEXT;
+                if (sendSMS($mobile, $message)) {
+                    header('Location: index.php');
+                    exit;
+                } else {
+                    $error = "خطا در ارسال پیامک. لطفاً دوباره تلاش کنید.";
+                    // در صورت عدم ارسال، اطلاعات OTP و زمان ارسال را پاک کنید
+                    unset($_SESSION['otp'], $_SESSION['otp_sent_at']);
+                }
+            } else {
+                $error = "کاربری با این شماره وجود ندارد.";
             }
-            curl_close($ch);
-            header('Location: index.php');
-            exit;
         } else {
             $error = "شماره موبایل نامعتبر است.";
         }
+
+    // مرحلهٔ وارد کردن OTP و ورود به داشبورد
     } elseif (isset($_POST['otp'])) {
         $otp = filter_var($_POST['otp'], FILTER_SANITIZE_STRING);
-        if ($otp == $_SESSION['otp']) {
+        if (isset($_SESSION['otp']) && $otp == $_SESSION['otp']) {
             $mobile = $_SESSION['mobile'];
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE mobile = ?");
+            // انجام JOIN بین جدول users و schools برای دریافت نام مدرسه
+            $stmt = $pdo->prepare("
+                SELECT
+                    u.id,
+                    u.role,
+                    s.school_name
+                FROM
+                    users u
+                INNER JOIN
+                    schools s ON u.school_id = s.id
+                WHERE
+                    u.mobile = ?
+            ");
             $stmt->execute([$mobile]);
             $user = $stmt->fetch();
 
             if ($user) {
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['role'] = $user['role'];
+                $_SESSION['user_id']    = $user['id'];
+                $_SESSION['role']       = $user['role'];
                 $_SESSION['school_name'] = $user['school_name'];
-                unset($_SESSION['otp'], $_SESSION['otp_sent_at'], $_SESSION['step'], $_SESSION['resend_success']);
+                unset($_SESSION['otp'], $_SESSION['mobile'], $_SESSION['otp_sent_at'], $_SESSION['step'], $_SESSION['resend_success'], $_SESSION['resend_wait_until']);
                 header('Location: dashboard.php');
                 exit;
             } else {
-                $error = "کاربری با این شماره یافت نشد.";
+                $error = "خطا در بازیابی اطلاعات کاربر یا مدرسه.";
             }
         } else {
             $error = "کد واردشده اشتباه است.";
         }
-    } elseif (isset($_POST['resend'])) {
-        if (isset($_SESSION['mobile'])) {
-            $last_sent = $_SESSION['otp_sent_at'] ?? 0;
-            if (time() - $last_sent < OTP_EXPIRY_SECONDS) {
-                $error = "لطفاً تا پایان شمارش صبر کنید.";
+
+    // مرحلهٔ ارسال مجدد OTP (درخواست AJAX)
+    } elseif (isset($_POST['resend']) && isset($_SESSION['mobile']) && isset($_SESSION['otp_sent_at'])) {
+        $wait_until = $_SESSION['resend_wait_until'] ?? 0;
+        $remaining_wait = $wait_until - time();
+
+        if ($remaining_wait > 0) {
+            http_response_code(429); // Too Many Requests
+            echo json_encode(['error' => "لطفاً " . $remaining_wait . " ثانیه صبر کنید."]);
+            exit;
+        } else {
+            $new_otp = generateOTP();
+            $_SESSION['otp'] = $new_otp;
+            $_SESSION['otp_sent_at'] = time();
+            // تنظیم زمان انتظار برای ارسال مجدد بعدی (مثلاً 60 ثانیه)
+            $_SESSION['resend_wait_until'] = time() + 60;
+
+            $message = "کد ورود جدید: {$new_otp}\n" . SMS_FOOTER_TEXT;
+            if (sendSMS($_SESSION['mobile'], $message)) {
+                echo json_encode(['success' => true]);
+                exit;
             } else {
-                $_SESSION['otp'] = rand(100000, 999999);
-                $_SESSION['otp_sent_at'] = time();
-                $message = "کد ورود جدید: {$_SESSION['otp']}\n" . SMS_FOOTER_TEXT;
-
-                // لاگ اطلاعات قبل از ارسال مجدد
-                error_log("[RESEND OTP] Time: " . date('Y-m-d H:i:s') . ", Mobile: " . $_SESSION['mobile'] . ", New OTP: " . $_SESSION['otp'] . "\n", 3, 'otp_log.txt');
-
-                $url = SABANOVIN_BASE_URL . "/sms/send.json";
-                $data = [
-                    'gateway' => SABANOVIN_GATEWAY,
-                    'to' => $_SESSION['mobile'],
-                    'text' => $message
-                ];
-
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                $response = curl_exec($ch);
-                curl_close($ch);
-
-                // لاگ پاسخ API بعد از ارسال مجدد
-                error_log("[RESEND OTP RESPONSE] Time: " . date('Y-m-d H:i:s') . ", Response: " . $response . "\n", 3, 'otp_log.txt');
-
-                $_SESSION['resend_success'] = true; // تنظیم فلگ موفقیت
-                header('Location: index.php'); // ریدایرکت برای نمایش پیغام
+                http_response_code(500); // Internal Server Error
+                echo json_encode(['error' => "خطا در ارسال مجدد کد. لطفاً دوباره تلاش کنید."]);
                 exit;
             }
         }
@@ -130,10 +162,12 @@ require_once 'header.php';
                 <?php
                 $mobile_masked = substr($_SESSION['mobile'], 0, 4) . '****' . substr($_SESSION['mobile'], -3);
                 $remaining = OTP_EXPIRY_SECONDS - (time() - ($_SESSION['otp_sent_at'] ?? 0));
+                $resend_available_in = ($_SESSION['resend_wait_until'] ?? 0) - time();
                 if ($remaining < 0) $remaining = 0;
+                if ($resend_available_in < 0) $resend_available_in = 0;
                 ?>
                 <p class="login-box-msg">کد ارسال‌شده به شماره <?= $mobile_masked ?> را وارد کنید</p>
-                <form method="POST">
+                <form method="POST" id="verify-form">
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" placeholder="کد یک‌بارمصرف" name="otp" required>
                         <div class="input-group-append"><div class="input-group-text"><span class="fas fa-lock"></span></div></div>
@@ -141,16 +175,18 @@ require_once 'header.php';
                     <div class="row">
                         <div class="col-6"><button type="submit" class="btn btn-primary btn-block">تأیید</button></div>
                         <div class="col-6">
-                            <form method="POST">
-                                <input type="hidden" name="resend" value="1">
-                                <button type="submit" class="btn btn-secondary btn-block" id="resend-btn" <?php if ($remaining > 0) echo 'disabled'; ?>>ارسال مجدد</button>
-                            </form>
+                            <button type="button" class="btn btn-secondary btn-block" id="resend-btn" <?php if ($resend_available_in > 0 || !isset($_SESSION['otp_sent_at']) || (time() - $_SESSION['otp_sent_at'] < OTP_EXPIRY_SECONDS)) echo 'disabled'; ?>>ارسال مجدد</button>
                         </div>
                     </div>
                     <p class="text-center mt-3">
-                        امکان ارسال مجدد در <span id="countdown"><?= $remaining ?></span> ثانیه
-                        <br>
-                        <a href="?step=initial">اصلاح شماره</a>
+                        <?php if (isset($_SESSION['otp_sent_at']) && (time() - $_SESSION['otp_sent_at'] < OTP_EXPIRY_SECONDS)): ?>
+                            امکان ارسال مجدد در <span id="countdown"><?= $remaining ?></span> ثانیه دیگر
+                        <?php elseif (isset($_SESSION['resend_wait_until']) && ($_SESSION['resend_wait_until'] > time())): ?>
+                            امکان ارسال مجدد در <span id="resend-countdown"><?= $resend_available_in ?></span> ثانیه دیگر
+                        <?php else: ?>
+                            اگر کد را دریافت نکرده‌اید، روی دکمه "ارسال مجدد" کلیک کنید.
+                        <?php endif; ?>
+                        <br><a href="?step=initial">اصلاح شماره</a>
                     </p>
                 </form>
             <?php else: ?>
@@ -172,19 +208,75 @@ require_once 'header.php';
 
 <script>
 let seconds = parseInt(document.getElementById("countdown")?.innerText || 0);
+let resendSeconds = parseInt(document.getElementById("resend-countdown")?.innerText || 0);
 const resendBtn = document.getElementById("resend-btn");
-if (resendBtn) {
+const verifyForm = document.getElementById("verify-form"); // گرفتن آیدی فرم اصلی
+
+if (resendBtn && seconds > 0) {
     const interval = setInterval(() => {
         seconds--;
         document.getElementById("countdown").innerText = seconds;
         resendBtn.disabled = seconds > 0;
-        resendBtn.innerText = seconds > 0 ? `ارسال مجدد` : `ارسال مجدد`;
         if (seconds <= 0) {
             clearInterval(interval);
             resendBtn.innerText = "ارسال مجدد";
+            resendBtn.disabled = resendSeconds > 0;
         }
     }, 1000);
+} else if (resendBtn && resendSeconds > 0) {
+    const resendInterval = setInterval(() => {
+        resendSeconds--;
+        document.getElementById("resend-countdown").innerText = resendSeconds;
+        resendBtn.disabled = resendSeconds > 0;
+        if (resendSeconds <= 0) {
+            clearInterval(resendInterval);
+            resendBtn.innerText = "ارسال مجدد";
+            resendBtn.disabled = false;
+        }
+    }, 1000);
+} else if (resendBtn) {
+    resendBtn.disabled = false;
 }
+
+// اضافه کردن رویداد کلیک به دکمه ارسال مجدد
+resendBtn?.addEventListener('click', function() {
+    // غیرفعال کردن دکمه برای جلوگیری از درخواست‌های مکرر
+    resendBtn.disabled = true;
+    resendBtn.innerText = "در حال ارسال...";
+
+    // ایجاد یک فرم دیتا برای ارسال درخواست POST
+    const formData = new FormData();
+    formData.append('resend', '1');
+
+    // ارسال درخواست AJAX به همین صفحه
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest' // برای تشخیص درخواست AJAX در سرور (اختیاری)
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload(); // ساده‌ترین راه برای به‌روزرسانی صفحه و نمایش پیغام موفقیت
+        } else if (data.error) {
+            alert(data.error);
+            resendBtn.disabled = false;
+            resendBtn.innerText = "ارسال مجدد";
+        } else {
+            alert('خطا در ارسال مجدد. لطفاً دوباره تلاش کنید.');
+            resendBtn.disabled = false;
+            resendBtn.innerText = "ارسال مجدد";
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('خطا در برقراری ارتباط با سرور.');
+        resendBtn.disabled = false;
+        resendBtn.innerText = "ارسال مجدد";
+    });
+});
 </script>
 <script src="assets/adminlte/plugins/jquery/jquery.min.js"></script>
 <script src="assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
